@@ -48,11 +48,19 @@
 // Verified working configuration, carried over from the previous project that
 // successfully drove this panel.
 // ---------------------------------------------------------------------------
+#if defined(ECLOCK_CORE_MBED)
+#define EPD_CS    7     // D7 is index 7
+#define EPD_DC    32    // P0.31 is index 32
+#define EPD_RST   33    // P0.15 is index 33 (custom added)
+#define EPD_BUSY  3     // D3 is index 3
+#define EPD_POWER 6     // D6 is index 6
+#else
 #define EPD_CS    D7    // P1.12
 #define EPD_DC    D16   // P0.31  (Plus-only pin)
 #define EPD_RST   D11   // P0.15  (Plus-only pin)
 #define EPD_BUSY  D3    // P0.29
 #define EPD_POWER D6    // P1.11 - MOSFET gate: HIGH powers the panel
+#endif
 
 // Hardware SPI (nRF52840 SPIM): SCK=D8 (P1.13), MOSI=D10 (P1.15).
 // GxEPD2 uses the default SPI instance, so these need no explicit setup.
