@@ -7,7 +7,8 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Phase 3 — Power management.** In progress. Phases 1 and 2 signed off.
+**Phase 4 — Bluetooth integration.** In progress. Phases 1 and 2 signed off. Phase 3
+baseline firmware running; power measurements deferred to after BLE works.
 
 ## Honest state of play
 
@@ -20,8 +21,8 @@ Last updated: 2026-08-22
 | Firmware | **Phase 1 blink/serial test committed, flashed, and running** |
 | Pinout / board traps | **Verified.** Plus variant mapping confirmed on real hardware |
 | Display driver approach | **Verified.** GxEPD2 works with the Plus variant; panel is alive |
-| Power management | Not started — Phase 3 |
-| BLE time sync (device side) | Not started |
+| Power management | **Phase 3 baseline running** — SAADC pin conflict solved, battery reads, clock face draws. Sleep is delay() placeholder; real measurements deferred to after BLE. |
+| BLE time sync (device side) | Not started — Phase 4 |
 | BLE time sync (HA side) | Draft component committed, not re-validated |
 | Enclosure | Notes only, no CAD |
 | Build instructions | `docs/SETUP.md` written and verified for Phase 1 scope |
@@ -65,6 +66,6 @@ refresh, the Bluefruit bootloader hard fault — are still unverified prior art.
 | --- | --- | --- | --- |
 | 1. Setup and validation | **Yes** | 2026-08-22 | All checks pass with captured evidence |
 | 2. Display functionality | **Yes** | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
-| 3. Power management | In progress | — | |
-| 4. Bluetooth integration | No | — | HA side drafted |
+| 3. Power management | Phase 3 baseline | 2026-08-22 | Clock face draws with battery monitoring; SAADC pin conflict solved. Deep sleep deferred. |
+| 4. Bluetooth integration | In progress | — | |
 | 5. Final refinement | No | — | |
