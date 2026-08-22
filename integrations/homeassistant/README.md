@@ -55,7 +55,7 @@ data:
   address: "AA:BB:CC:DD:EE:FF"
 ```
 
-Without an address it discovers by advertised name, `ePaper Clock`.
+Without an address it attempts to discover the clock by checking the Bluetooth cache for the advertised name, `ePaper Clock`. **However, name discovery can be flaky** because Home Assistant may cache incomplete profiles (e.g. if it misses the scan response packet). It is highly recommended to provide the MAC address to guarantee immediate discovery.
 
 ## Troubleshooting
 

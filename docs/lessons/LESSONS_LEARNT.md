@@ -113,7 +113,7 @@ HIGH always, or plan for a 3.4s full re-init after every power-on.
 ```cpp
 // Init: full hardware clear, sets rotation
 display.init(115200, true, 2, false);
-display.setRotation(1);  // landscape: 296w x 128h
+display.setRotation(1);  // landscape — width (296) is the long edge
 
 // Partial update (fast, no flash):
 display.setPartialWindow(0, 0, display.width(), display.height());
@@ -233,3 +233,17 @@ uses Dxx symbols with the Plus variant selected, which defines them as `static c
 - nRF52840 PS reference: SAADC chapter, PSEL registers, GPIO PIN_CNF
 - Datasheets: not committed (proprietary); download links in
   `docs/hardware/datasheets/README.md`
+### ArduinoBLE Silent Advertisement Failure
+On the mbed core, if BLE.stopAdvertise() is called, simply calling BLE.advertise() again later will silently fail to broadcast the advertisement packet. To reliably resume advertising, you must explicitly re-apply the GAP parameters (BLE.setLocalName, BLE.setDeviceName, and BLE.setAdvertisedService) immediately before calling BLE.advertise().
+
+### Integer Underflow in Timeout Logic
+When implementing non-blocking timeouts with millis(), ensure the timestamp being subtracted was captured *before or at the same time* as the 
+ow variable. If start = millis() is called after a blocking operation (like BLE.advertise()) but subtracted from an earlier 
+ow snapshot, 
+ow - start will underflow to a massive positive number (e.g. 4.2 billion), instantly triggering the timeout. Always use millis() - start inline or update 
+ow after the blocking call.
+
+### Home Assistant Bluetooth Discovery Quirks
+Home Assistant's sync_discovered_service_info relies on a local cache of discovered BLE devices. If the scanner misses the scan response packet, or if the device name changes, HA may cache the device with 
+ame=None or an incomplete profile. Because of this, relying on exact name matching (service_info.name == DEVICE_NAME) for manual triggers can be extremely flaky. 
+**Solution:** The most reliable way to force a connection to a specific BLE device is to bypass discovery entirely by passing the MAC address directly into sync_ble_device_from_address().

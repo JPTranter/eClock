@@ -70,12 +70,16 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 _LOGGER.error("Could not find ePaper Clock with address: %s", address)
                 return
         else:
-            for service_info in async_discovered_service_info(hass, connectable=True):
-                if service_info.name == DEVICE_NAME:
-                    ble_device = service_info.device
-                    address = service_info.address
-                    _LOGGER.info("Discovered ePaper Clock by name: %s [%s]", service_info.name, address)
-                    break
+            _LOGGER.info("Manual sync triggered without address. Scanning discovered devices...")
+            for service_info in async_discovered_service_info(hass, connectable=False):
+                _LOGGER.debug("Found device: name=%s, address=%s", service_info.name, service_info.address)
+                name = service_info.name or ""
+                if "epaper clock" in name.lower():
+                    ble_device = async_ble_device_from_address(hass, service_info.address, connectable=True)
+                    if ble_device:
+                        address = service_info.address
+                        _LOGGER.info("Discovered ePaper Clock by name: %s [%s]", service_info.name, address)
+                        break
             
             if not ble_device:
                 _LOGGER.error("Could not discover ePaper Clock BLE advertisement. Press a button on the clock to start advertising.")
