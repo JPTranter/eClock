@@ -184,7 +184,10 @@ The XIAO ships with the factory Seeed UF2 bootloader (e.g., `UF2 0.9.2-29-g6a9a6
 ### The Fix: mbed core + ArduinoBLE
 To get BLE working without risking a physical bootloader re-flash, you must use the Seeed mbed core (`board = xiaoble` with `framework-arduino-mbed-seeed`) and the standard `ArduinoBLE` library. 
 - Use the `[env:mbed]` environment in `platformio.ini`.
-- Disable the `Seeed_XIAO_nRF52840_Plus` custom variant for the mbed build (the variant structure is incompatible with the mbed core out-of-the-box).
+
+### ArduinoBLE requires strict non-blocking loops
+The `ArduinoBLE` stack on mbed requires frequent calls to `BLE.poll()` to handle background GATT events. **Never use `delay()`** or any blocking functions in the main loop or characteristic callbacks. 
+If a GATT operation (like a write from Home Assistant) is blocked by a `delay()` for more than a second before `BLE.poll()` can run to send the response, the host BlueZ stack will aggressively time out and tear down the connection. In Home Assistant, this presents confusingly as `[org.freedesktop.DBus.Error.UnknownObject] Method "WriteValue" ... doesn't exist` or `Characteristic ... was not found!`. All animations and display updates must be asynchronous.
 
 ### Capturing early boot logs (Terminal Capture)
 When dealing with instant HardFaults (like the BLE crash), the board crashes before the host PC can enumerate the USB serial port. To capture early boot logs:
