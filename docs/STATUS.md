@@ -7,7 +7,7 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Phase 2 — Display functionality.** Complete and ready for signoff. Phase 1 signed off.
+**Phase 3 — Power management.** In progress. Phases 1 and 2 signed off.
 
 ## Honest state of play
 
@@ -64,7 +64,7 @@ refresh, the Bluefruit bootloader hard fault — are still unverified prior art.
 | Phase | Signed off | Date | Notes |
 | --- | --- | --- | --- |
 | 1. Setup and validation | **Yes** | 2026-08-22 | All checks pass with captured evidence |
-| 2. Display functionality | Awaiting | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
-| 3. Power management | No | — | Highest risk phase |
+| 2. Display functionality | **Yes** | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
+| 3. Power management | In progress | — | |
 | 4. Bluetooth integration | No | — | HA side drafted |
 | 5. Final refinement | No | — | |

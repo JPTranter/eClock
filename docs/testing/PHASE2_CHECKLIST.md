@@ -3,7 +3,7 @@
 Goal: implement reliable ePaper display control and characterise refresh behaviour
 before any clock logic is built on top.
 
-**Status: PASSED 2026-08-22.** Evidence is captured serial output below.
+**Status: PASSED and SIGNED OFF 2026-08-22.**
 
 ## GxEPD2 integration
 
@@ -110,4 +110,4 @@ _Update_Part : 767578
 | Refresh | Full 3374 ms, partial 880 ms avg |
 | Ghosting | None at 53 consecutive partials |
 | Next | Phase 3 — power management |
-| Signed off | Awaiting your confirmation |
+| Signed off | **Yes — 2026-08-22** |
