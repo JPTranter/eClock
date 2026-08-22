@@ -11,7 +11,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontLarge7b.h"   // 84pt Arial Bold for the time digits (0-9, :)
+#include "FontHuge7b.h"   // 105pt Arial Bold for the time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
