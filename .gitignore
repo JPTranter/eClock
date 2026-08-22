@@ -1,0 +1,70 @@
+# ---- PlatformIO / Arduino ----
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+*.elf
+*.hex
+*.bin
+*.uf2
+*.map
+
+# ---- VS Code ----
+# Keep shareable editor config, ignore machine-local state.
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.example
+!.vscode/tasks.json
+.vscode/ipch/
+*.code-workspace
+
+# ---- Secrets / local config ----
+# Never commit Wi-Fi creds, BLE keys, HA tokens or board serial ports.
+secrets.h
+secrets.ini
+*.local.ini
+.env
+.env.*
+!.env.example
+
+# ---- Python (Home Assistant integration, tooling) ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# ---- 3D / CAD working files ----
+# Committed exports live in hardware/enclosure/exports; ignore scratch output.
+*.3mf
+*.gcode
+*.stl.bak
+
+# ---- Proprietary vendor documentation (DO NOT COMMIT) ----
+# Seeed Studio and Good Display datasheets, schematics and PCB archives are
+# proprietary and must not be redistributed in this repo. Keep them locally in
+# docs/hardware/datasheets/ for reference; see that folder's README for links.
+docs/hardware/datasheets/*
+!docs/hardware/datasheets/README.md
+
+# Belt-and-braces: never commit these types from anywhere in the tree.
+*.pdf
+*.PDF
+*_SCH*.zip
+*_PCB*.zip
+
+# ---- OS noise ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+._*
+
+# ---- Logs / scratch ----
+*.log
+/tmp/
+/scratch/

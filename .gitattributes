@@ -1,0 +1,22 @@
+# Normalise line endings in the repo, check out native on Windows.
+* text=auto
+
+*.md   text
+*.py   text diff=python
+*.cpp  text
+*.h    text
+*.ini  text
+*.json text
+*.yaml text
+*.yml  text
+
+# Binary assets — never diff or normalise these.
+*.pdf  binary
+*.zip  binary
+*.stl  binary
+*.step binary
+*.uf2  binary
+*.hex  binary
+*.bin  binary
+*.png  binary
+*.jpg  binary

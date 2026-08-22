@@ -1,0 +1,10 @@
+{
+  "domain": "epaper_clock",
+  "name": "ePaper Clock",
+  "documentation": "https://github.com/JPTranter/eClock/tree/main/integrations/homeassistant",
+  "dependencies": ["bluetooth_adapters"],
+  "codeowners": ["@JPTranter"],
+  "requirements": ["bleak-retry-connector>=3.4.0"],
+  "iot_class": "local_push",
+  "version": "0.1.0"
+}
