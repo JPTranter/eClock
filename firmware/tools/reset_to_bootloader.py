@@ -15,13 +15,15 @@ import serial
 import serial.tools.list_ports
 
 VID = 0x2886
-APP_PID = 0x8044      # application: TinyUSB CDC
+APP_PIDS = [0x8044, 0x8045]      # application: 0x8044 (Adafruit), 0x8045 (mbed)
 BOOT_PID = 0x0064     # Seeed UF2 bootloader CDC
 
 
-def find_port(pid):
+def find_port(pids):
+    if isinstance(pids, int):
+        pids = [pids]
     for p in serial.tools.list_ports.comports():
-        if p.vid == VID and p.pid == pid:
+        if p.vid == VID and p.pid in pids:
             return p.device
     return None
 
@@ -33,7 +35,7 @@ def main():
         print(f"[host] upload with: pio run -e adafruit -t upload --upload-port {boot}")
         return 0
 
-    app = find_port(APP_PID)
+    app = find_port(APP_PIDS)
     if not app:
         print("[host] FAIL: no XIAO found (neither application nor bootloader).")
         print("[host] Check the cable, or double-tap RESET to force the bootloader.")
