@@ -122,7 +122,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     # Register the callback in Home Assistant to monitor advertisements
     matcher = BluetoothCallbackMatcher(
-        service_uuid="00001805-0000-1000-8000-00805f9b34fb",
+        name="ePaper Clock",
         connectable=True
     )
     

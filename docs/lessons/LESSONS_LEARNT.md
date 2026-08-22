@@ -193,6 +193,11 @@ To get `GxEPD2` to toggle the reset pin (`P0.15`), we had to manually patch `~/.
 The `ArduinoBLE` stack on mbed requires frequent calls to `BLE.poll()` to handle background GATT events. **Never use `delay()`** or any blocking functions in the main loop or characteristic callbacks. 
 If a GATT operation (like a write from Home Assistant) is blocked by a `delay()` for more than a second before `BLE.poll()` can run to send the response, the host BlueZ stack will aggressively time out and tear down the connection. In Home Assistant, this presents confusingly as `[org.freedesktop.DBus.Error.UnknownObject] Method "WriteValue" ... doesn't exist` or `Characteristic ... was not found!`. All animations and display updates must be asynchronous.
 
+### BLE Advertisement Packet Size Limits (31 bytes)
+A standard BLE advertisement packet has a hard limit of 31 bytes. 
+When attempting to advertise a 128-bit Service UUID (18 bytes) alongside the local name `"ePaper Clock"` (14 bytes), the total size (32 bytes) exceeds the limit. `ArduinoBLE` resolves this by silently dropping the Service UUID from the primary advertisement packet. 
+Because of this, Home Assistant's `BluetoothCallbackMatcher` will fail to trigger if it is configured to match on `service_uuid`. The solution is to configure the Home Assistant integration to match on `name="ePaper Clock"` instead.
+
 ### Capturing early boot logs (Terminal Capture)
 When dealing with instant HardFaults (like the BLE crash), the board crashes before the host PC can enumerate the USB serial port. To capture early boot logs:
 1. Do not rely on standard serial monitors (they give up when the port disappears).
