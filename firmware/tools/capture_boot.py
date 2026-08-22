@@ -29,7 +29,7 @@ def main():
     duration = float(sys.argv[1]) if len(sys.argv) > 1 else 20.0
 
     print("[host] waiting for application port (VID 2886 PID 8044)...")
-    deadline = time.time() + 30
+    deadline = time.time() + 10
     port = None
     while time.time() < deadline:
         port = find_port(APP_PID)

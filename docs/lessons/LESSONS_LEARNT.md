@@ -174,36 +174,27 @@ blink it in display code. Use `LED_BLUE` (D12 = P0.06).
 
 ---
 
-## 5. BLE on nRF52840 (prior art — not yet re-verified)
+## 5. BLE on nRF52840 (verified 2026-08-22)
 
-### `Bluefruit.begin()` hard fault
+### The `Bluefruit.begin()` hard fault is real
+The XIAO ships with the factory Seeed UF2 bootloader (e.g., `UF2 0.9.2-29-g6a9a6a3`). The `Bluefruit52Lib` (and raw `sd_ble_*` SoftDevice calls) under the Adafruit core *expect* the custom Adafruit bootloader. Attempting to initialize BLE via the Adafruit core on a stock Seeed bootloader causes an immediate, unrecoverable CPU HardFault.
 
-The XIAO ships with the factory Seeed bootloader. `Bluefruit52Lib` and its internal
-SoftDevice routines require the custom Adafruit nRF52 UF2 bootloader. Attempting
-`Bluefruit.begin()` on the Seeed bootloader causes an immediate CPU hard fault.
-Flashing the Adafruit bootloader (usually via SWD or a specific UF2 file) resolves it.
+**Crucial Correction:** The previous theory that simply adding `-D USE_LFRC` would fix the `Bluefruit` crash on the Plus variant was **wrong**. While `USE_LFRC` is necessary for the clock, it does *not* prevent the bootloader SoftDevice conflict. The Adafruit core BLE will always crash on stock Seeed bootloaders.
 
-The original theory that this was an `LFRC` vs `LFXO` issue was **wrong** — it is a
-bootloader incompatibility.
+### The Fix: mbed core + ArduinoBLE
+To get BLE working without risking a physical bootloader re-flash, you must use the Seeed mbed core (`board = xiaoble` with `framework-arduino-mbed-seeed`) and the standard `ArduinoBLE` library. 
+- Use the `[env:mbed]` environment in `platformio.ini`.
+- Disable the `Seeed_XIAO_nRF52840_Plus` custom variant for the mbed build (the variant structure is incompatible with the mbed core out-of-the-box).
 
-### The `Bluefruit.begin()` hang on Plus (no 32 kHz crystal)
-
-The Plus has no 32 kHz crystal. `USE_LFRC` must be set or the BLE stack waits forever
-for a crystal that is not fitted. This was discovered in the old project's
-platformio.ini and confirmed in this project's Phase 2.
-
-### Current Time Service for time sync
-
-The clock exposes CTS (`0x1805`) with the Current Time characteristic (`0x2A2B`).
-Home Assistant writes 8 bytes: `struct.pack("<ii", epoch, tz_offset)`. The host-side
-component is at `integrations/homeassistant/`.
-
-### mbed core alternative
-
-Using the Seeed mbed core + `ArduinoBLE` avoids the bootloader issue, but the display
-needs the TWIM-disable hack (disable hardware I2C peripherals on P0.26/P0.27 and
-force them back to GPIO). Valid for older pogo-pin boards; less relevant on the Plus
-where DC/RST are on P0.31/P0.15 with no I2C conflict.
+### Capturing early boot logs (Terminal Capture)
+When dealing with instant HardFaults (like the BLE crash), the board crashes before the host PC can enumerate the USB serial port. To capture early boot logs:
+1. Do not rely on standard serial monitors (they give up when the port disappears).
+2. Use `firmware/tools/capture_boot.py` which aggressively polls WMI to catch the COM port the millisecond it appears.
+3. **PowerShell Loop:** Because the user must physically reset the board to trigger the boot, the 10-second polling timeout in the script might expire before the user acts. Run the script in an infinite PowerShell loop:
+   ```powershell
+   while ($true) { python firmware/tools/capture_boot.py 5; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep -Seconds 1 }
+   ```
+   This ensures the script catches the boot banner perfectly, even if the board HardFaults immediately after printing it.
 
 ---
 
