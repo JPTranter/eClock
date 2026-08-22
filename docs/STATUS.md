@@ -7,7 +7,7 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Phase 2 — Display functionality.** In progress. Phase 1 signed off 2026-08-22.
+**Phase 2 — Display functionality.** Complete and ready for signoff. Phase 1 signed off.
 
 ## Honest state of play
 
@@ -18,9 +18,9 @@ Last updated: 2026-08-22
 | Toolchain | **Verified.** PlatformIO 6.1.19 builds both core environments |
 | Upload path | **Verified.** Serial DFU; UF2 drag-and-drop rejected as unreliable |
 | Firmware | **Phase 1 blink/serial test committed, flashed, and running** |
-| Pinout / board traps | Partly verified — indices confirmed against the variant pin map; panel not yet driven |
-| Display driver approach | GxEPD2 chosen from prior art, **not yet exercised** |
-| Power management | Not started — this is the genuinely unknown work |
+| Pinout / board traps | **Verified.** Plus variant mapping confirmed on real hardware |
+| Display driver approach | **Verified.** GxEPD2 works with the Plus variant; panel is alive |
+| Power management | Not started — Phase 3 |
 | BLE time sync (device side) | Not started |
 | BLE time sync (HA side) | Draft component committed, not re-validated |
 | Enclosure | Notes only, no CAD |
@@ -64,7 +64,7 @@ refresh, the Bluefruit bootloader hard fault — are still unverified prior art.
 | Phase | Signed off | Date | Notes |
 | --- | --- | --- | --- |
 | 1. Setup and validation | **Yes** | 2026-08-22 | All checks pass with captured evidence |
-| 2. Display functionality | In progress | — | GxEPD2 on the real panel |
+| 2. Display functionality | Awaiting | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
 | 3. Power management | No | — | Highest risk phase |
 | 4. Bluetooth integration | No | — | HA side drafted |
 | 5. Final refinement | No | — | |
