@@ -52,6 +52,7 @@ static const uint32_t SYNC_TIMEOUT  = 60 * 1000UL;         // 60 seconds max per
 
 static uint8_t g_last_sync_hour = 0;
 static uint8_t g_last_sync_minute = 0;
+static bool g_last_sync_failed = false;
 
 // Display state
 static bool g_needs_display_update = true;  // always draw on first loop
@@ -128,6 +129,10 @@ static void drawClockFace() {
             // ---------------------------------------------------------------
             case STATE_SYNCING:
             case STATE_RESYNCING: {
+                if (g_epoch > 0) {
+                    goto draw_running_face;
+                }
+                
                 display.setFont(&FreeSansBold24pt7b);
                 const char* msg = (g_state == STATE_SYNCING)
                                   ? "Syncing..."
@@ -148,7 +153,8 @@ static void drawClockFace() {
             // ---------------------------------------------------------------
             // RUNNING: big single-line time, status below
             // ---------------------------------------------------------------
-            case STATE_RUNNING: {
+            case STATE_RUNNING:
+            draw_running_face: {
                 char timeBuf[8];
                 snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", g_hour, g_minute);
 
@@ -177,12 +183,21 @@ static void drawClockFace() {
                                   (display.height() - th) / 2 - ty);
                 display.print(timeBuf);
 
-                // Status line at the very bottom
+                // Status line at the very bottom right
                 char syncBuf[32];
-                snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u via HA", g_last_sync_hour, g_last_sync_minute);
+                if (g_state == STATE_RESYNCING || g_state == STATE_SYNCING) {
+                    snprintf(syncBuf, sizeof(syncBuf), "Syncing...");
+                } else if (g_last_sync_failed) {
+                    snprintf(syncBuf, sizeof(syncBuf), "Sync failed");
+                } else {
+                    snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u via HA", g_last_sync_hour, g_last_sync_minute);
+                }
                 
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(4, display.height() - 5);
+                int16_t sx, sy;
+                uint16_t sw, sh;
+                display.getTextBounds(syncBuf, 0, 0, &sx, &sy, &sw, &sh);
+                display.setCursor(display.width() - sw - 4, display.height() - 5);
                 display.print(syncBuf);
                 break;
             }
@@ -285,6 +300,7 @@ void loop() {
             updateTimeStruct();
             g_last_sync_hour = g_hour;
             g_last_sync_minute = g_minute;
+            g_last_sync_failed = false;
             g_needs_display_update = true;
 
             // Shut down radio to save power now that we have the time
@@ -307,9 +323,8 @@ void loop() {
 
         // Only trigger if we aren't already in the middle of a sync attempt
         if (g_state != STATE_SYNCING && g_state != STATE_RESYNCING) {
-            ClockState old_state = g_state;
             g_state = STATE_RESYNCING;
-            g_needs_display_update = (old_state == STATE_NO_TIME);
+            g_needs_display_update = true;
             startSyncAttempt();
         }
     }
@@ -334,7 +349,8 @@ void loop() {
                 } else {
                     // Re-sync failed — carry on with the drifting clock
                     g_state = STATE_RUNNING;
-                    // Don't force a redraw for a timeout — the clock face hasn't changed
+                    g_last_sync_failed = true;
+                    g_needs_display_update = true;
                     Serial.println("Re-sync timed out, continuing with existing time.");
                 }
             }
