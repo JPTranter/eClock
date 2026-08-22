@@ -1,197 +1,173 @@
 /**
- * eClock - Phase 2: display functionality
+ * eClock - Phase 3: power-managed clock firmware
  *
- * An interactive, serial-driven test harness for the 2.9" SSD1680 ePaper panel.
- * Phase 2's real deliverable is not "text on screen" but *characterisation*: how
- * partial refresh behaves, how fast it is, and how many partials can run before
- * ghosting forces a full refresh. That needs repeatable operator-driven runs, so
- * this is a menu rather than a fixed demo.
+ * Displays HH:MM with battery level on every tick. Partial refresh each minute,
+ * full refresh once per hour. Power rail stays on for now (Option A); sleep is
+ * a delay() placeholder pending real current measurement.
  *
- * Send a single character over serial to run a command; press '?' for the menu.
+ * THE SAADC LESSON (P0.31 conflict):
+ *   D16 (EPD_DC) and PIN_VBAT both map to P0.31. analogRead() activates the
+ *   SAADC peripheral with a PSEL claim on this pin. The Arduino pinMode(OUTPUT)
+ *   wrapper does NOT clear that claim. Result: every SPI transaction after any
+ *   analogRead() silently fails because the SAADC peripheral overrides the GPIO
+ *   toggle for the DC line, and GxEPD2 reports "_Update_Full : 0".
+ *
+ *   The fix: stop the SAADC task, disable the peripheral, clear all channel
+ *   PSEL registers (set to 0xFFFFFFFF = disconnected), then reset PIN_CNF
+ *   directly to GPIO output. This is the minimum nRF52840 register dance to
+ *   release a peripheral pin claim.
  *
  * Panel: GDEY029T94 / FPC-A005, 296x128 mono, SSD1680 controller.
- * See docs/hardware/PINOUT.md before changing any pin or power handling here.
+ * Pins: CS=D7, DC=D16(P0.31), RST=D11(P0.15), BUSY=D3, PWR=D6(P1.11)
  */
 
 #include <Arduino.h>
-#include "board_pins.h"
 
-// See the Phase 1 notes: on the Adafruit core `Serial` is TinyUSB CDC and the
-// build fails at link time without this include.
 #if defined(ECLOCK_CORE_ADAFRUIT)
   #include <Adafruit_TinyUSB.h>
 #endif
 
+#include "board_pins.h"
+
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
-#include <Fonts/FreeSans12pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
 
-// GxEPD2_290_T94_V2 maps to the SSD1680 controller on this panel.
-// The second template parameter is the page-buffer height; using the full
-// panel HEIGHT gives a single-page buffer (296*128/8 = 4736 bytes), which fits
-// comfortably in 232KB of RAM and avoids multi-page complexity.
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
-static const uint32_t SERIAL_WAIT_MS = 3000;
-
-static bool     g_displayReady   = false;
-static uint32_t g_partialCount   = 0;   // partials since the last full refresh
-static uint32_t g_fullCount      = 0;
-static uint32_t g_lastOpMs       = 0;   // duration of the last refresh operation
+// ---------------------------------------------------------------------------
+// Timing
+// ---------------------------------------------------------------------------
+static const uint32_t FULL_REFRESH_EVERY = 60;  // partials between full refreshes
 
 // ---------------------------------------------------------------------------
-// Panel power
-//
-// The EN05 gates the panel supply with a MOSFET on EPD_POWER (D6 = P1.11).
-// Nothing on the SPI bus matters until this is HIGH: the panel will accept
-// writes and do nothing, which reads exactly like a software bug.
-//
-// Kept as explicit calls because Phase 3 will want to measure the cost of
-// cutting this rail between updates.
+// Battery (with SAADC peripheral release on P0.31)
 // ---------------------------------------------------------------------------
-static void panelPowerOn() {
-    pinMode(EPD_POWER, OUTPUT);
-    digitalWrite(EPD_POWER, HIGH);
-    delay(50);   // let the rail settle before driving RST/SPI
-}
-
-static void panelPowerOff() {
-    digitalWrite(EPD_POWER, LOW);
-}
-
-static void displayInit() {
-    Serial.println(F("[disp] powering panel (EPD_POWER HIGH)"));
-    panelPowerOn();
-
-    Serial.println(F("[disp] display.init()"));
-    // init(serial_diag_baudrate, initial_refresh, reset_pulse_ms, pulldown_rst)
-    // initial_refresh=true forces a full clear so we start from a known state.
-    display.init(115200, true, 2, false);
-    display.setRotation(1);        // landscape: 296 wide x 128 tall
-
-    g_displayReady = true;
-    g_partialCount = 0;
-
-    Serial.print(F("[disp] ready. w="));
-    Serial.print(display.width());
-    Serial.print(F(" h="));
-    Serial.print(display.height());
-    Serial.print(F(" pages="));
-    Serial.println(display.pages());
-}
-
-static bool requireDisplay() {
-    if (!g_displayReady) {
-        Serial.println(F("[warn] display not initialised - press 'i' first"));
-        return false;
-    }
-    return true;
-}
-
-// ---------------------------------------------------------------------------
-// Test patterns
-// ---------------------------------------------------------------------------
-
-/** Full-window refresh with a geometry/alignment pattern. */
-static void drawTestPattern() {
-    if (!requireDisplay()) return;
-
-    uint32_t t0 = millis();
-    display.setFullWindow();
-    display.firstPage();
-    do {
-        display.fillScreen(GxEPD_WHITE);
-
-        // Border: proves we know the true panel bounds in this rotation.
-        display.drawRect(0, 0, display.width(), display.height(), GxEPD_BLACK);
-
-        // Corner markers: catch off-by-one and rotation errors.
-        const int16_t m = 12;
-        display.fillRect(0, 0, m, m, GxEPD_BLACK);
-        display.fillRect(display.width() - m, 0, m, m, GxEPD_BLACK);
-        display.fillRect(0, display.height() - m, m, m, GxEPD_BLACK);
-        display.fillRect(display.width() - m, display.height() - m, m, m, GxEPD_BLACK);
-
-        // Centre crosshair.
-        display.drawLine(display.width() / 2, 0,
-                         display.width() / 2, display.height(), GxEPD_BLACK);
-        display.drawLine(0, display.height() / 2,
-                         display.width(), display.height() / 2, GxEPD_BLACK);
-
-        display.setTextColor(GxEPD_BLACK);
-        display.setFont(&FreeSans9pt7b);
-        display.setCursor(20, 30);
-        display.print(F("eClock Phase 2"));
-        display.setCursor(20, 50);
-        display.print(display.width());
-        display.print(F("x"));
-        display.print(display.height());
-    } while (display.nextPage());
-
-    g_lastOpMs = millis() - t0;
-    g_fullCount++;
-    g_partialCount = 0;
-
-    Serial.print(F("[full] test pattern in "));
-    Serial.print(g_lastOpMs);
-    Serial.println(F(" ms"));
-}
-
-/** Full white clear. */
-static void doClear() {
-    if (!requireDisplay()) return;
-
-    uint32_t t0 = millis();
-    display.setFullWindow();
-    display.firstPage();
-    do {
-        display.fillScreen(GxEPD_WHITE);
-    } while (display.nextPage());
-
-    g_lastOpMs = millis() - t0;
-    g_fullCount++;
-    g_partialCount = 0;
-
-    Serial.print(F("[full] clear in "));
-    Serial.print(g_lastOpMs);
-    Serial.println(F(" ms"));
-}
+static const float BAT_VREF    = 3.6f;
+static const float BAT_DIVIDER = 2.0f;
 
 /**
- * Draw a mock clock face. `partial` selects a partial-window update, which is
- * what the real clock will do once a minute.
+ * Read battery voltage AND release the SAADC peripheral's claim on P0.31.
  *
- * The time shown is derived from uptime, not a real clock - Phase 4 supplies
- * real time over BLE. The point here is to exercise a realistic glyph load.
+ * WHY THIS IS NOT A SIMPLE analogRead():
+ *   D16 (EPD_DC) and PIN_VBAT both map to physical P0.31. analogRead()
+ *   activates the SAADC with a PSEL claim on this pin. pinMode(OUTPUT)
+ *   restores GPIO direction but does NOT clear the PSEL register, and an
+ *   active peripheral claim overrides GPIO on the nRF52840. The result is
+ *   that every subsequent SPI DC toggle silently fails, and GxEPD2 reports
+ *   "_Update_Full : 0" with no error.
+ *
+ *   This function stops the SAADC, disables it, clears all 8 channel PSEL
+ *   registers, resets PIN_CNF directly, and then calls pinMode(OUTPUT) so
+ *   the Arduino framework's internal tracking stays consistent.
+ *
+ * Call this ANYTIME — before or after display operations. The SAADC release
+ * makes the ordering irrelevant, which is essential for a clock that reads
+ * the battery on every tick.
  */
-static void drawClockFace(bool partial) {
-    if (!requireDisplay()) return;
+static float readBatteryVoltage() {
+    // Switch in the voltage divider
+    pinMode(VBAT_ENABLE, OUTPUT);
+    digitalWrite(VBAT_ENABLE, LOW);
+    delay(1);
 
-    const uint32_t secs  = millis() / 1000;
-    const uint8_t  hh    = (uint8_t)((secs / 3600) % 24);
-    const uint8_t  mm    = (uint8_t)((secs / 60) % 60);
+    const int raw = analogRead(PIN_VBAT);
 
-    char timeBuf[6];
-    snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", hh, mm);
+    // Disconnect divider to save quiescent current
+    digitalWrite(VBAT_ENABLE, HIGH);
+    pinMode(VBAT_ENABLE, INPUT);
 
-    uint32_t t0 = millis();
+    // ---- Release P0.31 from the SAADC peripheral ----
+    // After analogRead(), the SAADC has a PSEL claim on P0.31 that overrides
+    // GPIO operations. Stop the SAADC, disable it, clear all PSEL registers,
+    // then reconfigure P0.31 as a standard GPIO output for the DC line.
 
-    if (partial) {
-        // Full-window partial update. GxEPD2 handles the differential/
-        // double-buffer logic; this is the fast, non-flashing path.
-        display.setPartialWindow(0, 0, display.width(), display.height());
-    } else {
+    // 1. Stop the ongoing SAADC task and wait for acknowledgement
+    NRF_SAADC->TASKS_STOP = 1;
+    while (NRF_SAADC->EVENTS_STOPPED == 0) {}
+    NRF_SAADC->EVENTS_STOPPED = 0;
+
+    // 2. Disable the SAADC peripheral entirely
+    NRF_SAADC->ENABLE = 0;
+
+    // 3. Clear PSEL registers for all 8 channels (0xFFFFFFFF = disconnected)
+    for (int ch = 0; ch < 8; ch++) {
+        NRF_SAADC->CH[ch].PSELP = 0xFFFFFFFFUL;
+        NRF_SAADC->CH[ch].PSELN = 0xFFFFFFFFUL;
+    }
+
+    // 4. Direct register write to reset P0.31 as GPIO output
+    NRF_GPIO->PIN_CNF[31] =
+        (GPIO_PIN_CNF_DIR_Output   << GPIO_PIN_CNF_DIR_Pos)   |
+        (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) |
+        (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos)  |
+        (GPIO_PIN_CNF_DRIVE_S0S1   << GPIO_PIN_CNF_DRIVE_Pos) |
+        (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos);
+    NRF_GPIO->OUTCLR = (1UL << 31);  // LOW = command mode
+
+    // 5. Arduino-level restore so framework tracking is consistent
+    pinMode(EPD_DC, OUTPUT);
+    digitalWrite(EPD_DC, LOW);
+
+    // Convert raw ADC to voltage
+    return ((float)raw / 4095.0f) * BAT_VREF * BAT_DIVIDER;
+}
+
+/** Crude linear: 4.2V = full, 3.5V = empty */
+static uint8_t batteryPercent(float voltage) {
+    if (voltage >= 4.2f) return 100;
+    if (voltage <= 3.5f) return 0;
+    return (uint8_t)((voltage - 3.5f) / 0.7f * 100.0f);
+}
+
+/** Draw a simple battery icon. */
+static void drawBatteryIcon(int16_t x, int16_t y, uint8_t pct) {
+    const int16_t w = 22, h = 10;
+    display.drawRect(x, y, w, h, GxEPD_BLACK);
+    display.fillRect(x + w, y + 3, 2, 4, GxEPD_BLACK);
+    if (pct > 0) {
+        const int16_t barW = (int16_t)((float)(w - 3) * pct / 100.0f);
+        display.fillRect(x + 1, y + 1, barW, h - 2, GxEPD_BLACK);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Clock state (millis-based; Phase 4 replaces with BLE-synced time)
+// ---------------------------------------------------------------------------
+static uint32_t g_uptimeS      = 0;
+static uint8_t  g_hour         = 0;
+static uint8_t  g_minute       = 0;
+static uint32_t g_partialCount = 0;
+static uint32_t g_fullCount    = 0;
+static float    g_batVoltage   = 0.0f;
+
+static void tickTime() {
+    g_uptimeS++;
+    const uint32_t secs = g_uptimeS;
+    g_hour   = (uint8_t)((secs / 3600) % 24);
+    g_minute = (uint8_t)((secs / 60) % 60);
+}
+
+// ---------------------------------------------------------------------------
+// Display
+// ---------------------------------------------------------------------------
+
+static void drawClockFace(bool full) {
+    if (full) {
         display.setFullWindow();
+    } else {
+        display.setPartialWindow(0, 0, display.width(), display.height());
     }
 
     display.firstPage();
     do {
         display.fillScreen(GxEPD_WHITE);
-
-        // Big time, centred.
         display.setTextColor(GxEPD_BLACK);
+
+        // Time: centred, large
+        char timeBuf[6];
+        snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", g_hour, g_minute);
         display.setFont(&FreeSansBold24pt7b);
         int16_t bx, by;
         uint16_t bw, bh;
@@ -200,243 +176,122 @@ static void drawClockFace(bool partial) {
                           (display.height() + bh) / 2 - 8);
         display.print(timeBuf);
 
-        // Status line: refresh counters, so ghosting can be correlated with
-        // exactly how many partials have accumulated.
+        // Status line: battery icon + voltage + refresh counters
         display.setFont(&FreeSans9pt7b);
         display.setCursor(4, display.height() - 5);
-        display.print(partial ? F("P") : F("F"));
-        display.print(F(" p="));
-        display.print(g_partialCount + (partial ? 1 : 0));
-        display.print(F(" f="));
-        display.print(g_fullCount + (partial ? 0 : 1));
 
-        // A thin baseline: fine detail is where ghosting shows up first.
-        display.drawLine(0, display.height() - 20,
-                         display.width(), display.height() - 20, GxEPD_BLACK);
+        const uint8_t batPct = batteryPercent(g_batVoltage);
+        drawBatteryIcon(display.getCursorX(), display.getCursorY() - 12, batPct);
+        display.setCursor(display.getCursorX() + 28, display.getCursorY());
+
+        display.print(full ? F("F") : F("p"));
+        display.print(g_partialCount + (full ? 0 : 1));
+        display.print(F("/"));
+        display.print(g_fullCount + (full ? 1 : 0));
+
+        display.print(F("  "));
+        display.print(g_batVoltage, 2);
+        display.print(F("V  "));
+        display.print(batPct);
+        display.print(F("%"));
     } while (display.nextPage());
 
-    g_lastOpMs = millis() - t0;
-    if (partial) {
-        g_partialCount++;
-    } else {
+    if (full) {
         g_fullCount++;
         g_partialCount = 0;
-    }
-
-    Serial.print(partial ? F("[part] ") : F("[full] "));
-    Serial.print(timeBuf);
-    Serial.print(F(" in "));
-    Serial.print(g_lastOpMs);
-    Serial.print(F(" ms  partials_since_full="));
-    Serial.println(g_partialCount);
-}
-
-/**
- * Ghosting characterisation: run a batch of partial updates back to back,
- * reporting timing for each. Inspect the glass afterwards and note where
- * ghosting became objectionable.
- */
-static void runPartialBurst(uint16_t n) {
-    if (!requireDisplay()) return;
-
-    Serial.print(F("[burst] "));
-    Serial.print(n);
-    Serial.println(F(" partial refreshes - watch the panel for ghosting"));
-
-    uint32_t total = 0;
-    uint32_t worst = 0;
-
-    for (uint16_t i = 0; i < n; i++) {
-        const uint32_t t0 = millis();
-
-        display.setPartialWindow(0, 0, display.width(), display.height());
-        display.firstPage();
-        do {
-            display.fillScreen(GxEPD_WHITE);
-            display.setTextColor(GxEPD_BLACK);
-            display.setFont(&FreeSansBold24pt7b);
-
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%03u", (unsigned)(g_partialCount + 1));
-            display.setCursor(90, 80);
-            display.print(buf);
-
-            display.setFont(&FreeSans9pt7b);
-            display.setCursor(4, display.height() - 5);
-            display.print(F("burst partial #"));
-            display.print(g_partialCount + 1);
-        } while (display.nextPage());
-
-        const uint32_t dt = millis() - t0;
-        total += dt;
-        if (dt > worst) worst = dt;
+    } else {
         g_partialCount++;
-
-        Serial.print(F("  #"));
-        Serial.print(g_partialCount);
-        Serial.print(F(" "));
-        Serial.print(dt);
-        Serial.println(F(" ms"));
     }
-
-    Serial.print(F("[burst] done. n="));
-    Serial.print(n);
-    Serial.print(F(" avg="));
-    Serial.print(total / (n ? n : 1));
-    Serial.print(F(" ms worst="));
-    Serial.print(worst);
-    Serial.print(F(" ms total_partials_since_full="));
-    Serial.println(g_partialCount);
-    Serial.println(F("[burst] inspect the glass; press 'f' for a full refresh"));
 }
 
-/** Font size comparison, for choosing the clock face typography. */
-static void drawFontSamples() {
-    if (!requireDisplay()) return;
-
-    uint32_t t0 = millis();
-    display.setFullWindow();
-    display.firstPage();
-    do {
-        display.fillScreen(GxEPD_WHITE);
-        display.setTextColor(GxEPD_BLACK);
-
-        display.setFont(&FreeSans9pt7b);
-        display.setCursor(4, 16);
-        display.print(F("FreeSans9  08:42 battery 87%"));
-
-        display.setFont(&FreeSans12pt7b);
-        display.setCursor(4, 42);
-        display.print(F("FreeSans12  08:42"));
-
-        display.setFont(&FreeSansBold24pt7b);
-        display.setCursor(4, 100);
-        display.print(F("08:42"));
-    } while (display.nextPage());
-
-    g_lastOpMs = millis() - t0;
-    g_fullCount++;
-    g_partialCount = 0;
-
-    Serial.print(F("[full] font samples in "));
-    Serial.print(g_lastOpMs);
-    Serial.println(F(" ms"));
-}
-
-static void doHibernate() {
-    if (!requireDisplay()) return;
-    Serial.println(F("[disp] hibernate() - panel to deep sleep"));
-    display.hibernate();
-    Serial.println(F("[disp] hibernated. Next draw needs 'i' if it does not wake."));
-}
-
-static void printStats() {
-    Serial.println(F("--- stats ---"));
-    Serial.print(F("  pins CS/DC/RST/BUSY  : "));
-    Serial.print(EPD_CS);   Serial.print(F("/"));
-    Serial.print(EPD_DC);   Serial.print(F("/"));
-    Serial.print(EPD_RST);  Serial.print(F("/"));
-    Serial.println(EPD_BUSY);
-    Serial.print(F("  power gate           : D6 -> "));
-    Serial.println(EPD_POWER);
-    Serial.print(F("  BUSY pin reads       : "));
-    pinMode(EPD_BUSY, INPUT);
-    Serial.print(digitalRead(EPD_BUSY));
-    Serial.println(F("  (SSD1680: 1 = busy, 0 = idle)"));
-    Serial.print(F("  initialised          : "));
-    Serial.println(g_displayReady ? F("yes") : F("no"));
-    Serial.print(F("  full refreshes       : "));
-    Serial.println(g_fullCount);
-    Serial.print(F("  partials since full  : "));
-    Serial.println(g_partialCount);
-    Serial.print(F("  last operation       : "));
-    Serial.print(g_lastOpMs);
-    Serial.println(F(" ms"));
-    Serial.print(F("  uptime               : "));
-    Serial.print(millis() / 1000);
-    Serial.println(F(" s"));
-}
-
-static void printMenu() {
-    Serial.println();
-    Serial.println(F("=============================================="));
-    Serial.println(F("  eClock Phase 2 - display test harness"));
-    Serial.println(F("=============================================="));
-    Serial.println(F("  i  init display (full clear)"));
-    Serial.println(F("  t  full refresh: geometry test pattern"));
-    Serial.println(F("  c  full refresh: clear to white"));
-    Serial.println(F("  n  full refresh: clock face"));
-    Serial.println(F("  p  PARTIAL refresh: clock face"));
-    Serial.println(F("  b  burst of 10 partial refreshes"));
-    Serial.println(F("  B  burst of 50 partial refreshes"));
-    Serial.println(F("  k  font samples"));
-    Serial.println(F("  h  hibernate panel"));
-    Serial.println(F("  o  panel power OFF (cut the D6 rail)"));
-    Serial.println(F("  s  stats"));
-    Serial.println(F("  ?  this menu"));
-    Serial.println(F("=============================================="));
-    Serial.println();
-}
-
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 void setup() {
 #if defined(ECLOCK_CORE_MBED)
-    // Must run before anything touches P0.26/P0.27 - see board_pins.h.
     eclock_release_twim_pins();
 #endif
 
     Serial.begin(115200);
     uint32_t start = millis();
-    while (!Serial && (millis() - start) < SERIAL_WAIT_MS) {
-        delay(10);
-    }
+    while (!Serial && (millis() - start) < 3000) delay(10);
 
     Serial.println();
-    Serial.println(F("eClock Phase 2 - display functionality"));
+    Serial.println(F("eClock Phase 3 — power-managed clock"));
     Serial.print(F("Built: "));
     Serial.print(F(__DATE__));
     Serial.print(F(" "));
     Serial.println(F(__TIME__));
-    Serial.print(F("Panel pins: CS="));   Serial.print(EPD_CS);
-    Serial.print(F(" DC="));              Serial.print(EPD_DC);
-    Serial.print(F(" RST="));             Serial.print(EPD_RST);
-    Serial.print(F(" BUSY="));            Serial.print(EPD_BUSY);
-    Serial.print(F(" PWR="));             Serial.println(EPD_POWER);
+    Serial.println(F("  Strategy: panel rail always on (Option A)"));
+    Serial.println(F("  Sleep:    delay(5s) placeholder"));
+    Serial.println(F("  Battery:  SAADC PSEL release on P0.31 after each read"));
+    Serial.println();
 
-    printMenu();
-    Serial.println(F("[boot] auto-initialising display..."));
-    displayInit();
-    drawTestPattern();
-    Serial.println(F("[boot] if the panel is blank, see the checklist in"));
-    Serial.println(F("[boot] docs/hardware/PINOUT.md ('Diagnosing a non-responsive panel')"));
+    // Battery before init — ordering doesn't matter now that the SAADC
+    // release is robust, but doing it first is cheapest (no display rail
+    // powered yet).
+    g_batVoltage = readBatteryVoltage();
+    Serial.print(F("[boot] battery: "));
+    Serial.print(g_batVoltage, 2);
+    Serial.print(F("V ("));
+    Serial.print(batteryPercent(g_batVoltage));
+    Serial.println(F("%)"));
+
+    // Power the panel once and leave it on.
+    pinMode(EPD_POWER, OUTPUT);
+    digitalWrite(EPD_POWER, HIGH);
+    delay(50);
+
+    display.init(115200, true, 2, false);  // full hardware clear
+    display.setRotation(1);
+
+    tickTime();
+
+    const uint32_t t0 = millis();
+    drawClockFace(true);
+    Serial.print(F("[boot] full refresh in "));
+    Serial.print(millis() - t0);
+    Serial.println(F(" ms"));
 }
 
 void loop() {
-    while (Serial.available() > 0) {
-        const int c = Serial.read();
-        if (c == '\r' || c == '\n') continue;
+    // PLACEHOLDER: not true sleep. Replace with RTC-timed sd_app_evt_wait()
+    // after measuring idle current with a multimeter / USB power meter.
+    delay(5000);
 
-        switch (c) {
-            case 'i': displayInit();          break;
-            case 't': drawTestPattern();      break;
-            case 'c': doClear();              break;
-            case 'n': drawClockFace(false);   break;
-            case 'p': drawClockFace(true);    break;
-            case 'b': runPartialBurst(10);    break;
-            case 'B': runPartialBurst(50);    break;
-            case 'k': drawFontSamples();      break;
-            case 'h': doHibernate();          break;
-            case 'o':
-                panelPowerOff();
-                g_displayReady = false;
-                Serial.println(F("[disp] panel rail off; press 'i' to bring it back"));
-                break;
-            case 's': printStats();           break;
-            case '?': printMenu();            break;
-            default:
-                Serial.print(F("[warn] unknown command '"));
-                Serial.print((char)c);
-                Serial.println(F("' - press '?' for the menu"));
-                break;
+    tickTime();
+    g_batVoltage = readBatteryVoltage();
+
+    if (g_partialCount >= FULL_REFRESH_EVERY) {
+        const uint32_t t0 = millis();
+        drawClockFace(true);
+        Serial.print(F("[full "));
+        Serial.print(g_hour);
+        Serial.print(F(":"));
+        if (g_minute < 10) Serial.print(F("0"));
+        Serial.print(g_minute);
+        Serial.print(F("] full in "));
+        Serial.print(millis() - t0);
+        Serial.print(F(" ms  bat="));
+        Serial.print(g_batVoltage, 2);
+        Serial.println(F("V"));
+    } else {
+        const uint32_t t0 = millis();
+        drawClockFace(false);
+        // Verbose log every 5 ticks; silent otherwise
+        if (g_uptimeS % 60 == 0) {
+            Serial.print(F("[part "));
+            Serial.print(g_hour);
+            Serial.print(F(":"));
+            if (g_minute < 10) Serial.print(F("0"));
+            Serial.print(g_minute);
+            Serial.print(F("] p"));
+            Serial.print(g_partialCount);
+            Serial.print(F(" in "));
+            Serial.print(millis() - t0);
+            Serial.print(F(" ms  bat="));
+            Serial.print(g_batVoltage, 2);
+            Serial.println(F("V"));
         }
     }
 }
