@@ -172,15 +172,16 @@ static void drawClockFace() {
                 // Use the big 84pt font for the time
                 display.setFont(&font);
 
-                // Centre the time string horizontally and vertically
+                // Centre the time string horizontally
                 int16_t tx, ty;
                 uint16_t tw, th;
                 display.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
                 
-                // Shift down slightly to leave room for the date at the top
-                // and the sync line at the bottom
-                display.setCursor((display.width() - tw) / 2 - tx,
-                                  (display.height() - th) / 2 - ty);
+                // Top text bottom edge is ~22. Bottom text top edge is ~110.
+                // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
+                // Time font has th=76, ty=-97. Center of time text relative to baseline is -97 + 38 = -59.
+                // So baseline should be 66 - (-59) = 125 to perfectly center the ink between the two rows.
+                display.setCursor((display.width() - tw) / 2 - tx, 125);
                 display.print(timeBuf);
 
                 // Status line at the very bottom right
