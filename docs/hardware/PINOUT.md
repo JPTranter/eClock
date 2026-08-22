@@ -107,7 +107,8 @@ of the two reasons the core choice was hard.
 
 ## Panel identification
 
-- Panel: GDEY029T94 (also marked FPC-A005), 296 x 128, monochrome.
+- Panel: GDEY029T94 (also marked FPC-A005), 296 × 128, monochrome.
+- Operating orientation: **landscape** (`display.setRotation(1)`). The 296-pixel dimension is the horizontal width.
 - Controller: **SSD1680**.
 - GxEPD2 driver class: `GxEPD2_290_T94_V2`.
 

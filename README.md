@@ -23,7 +23,7 @@ actually stand today.
 | --- | --- |
 | Microcontroller | Seeed Studio XIAO nRF52840 |
 | Display shield | Seeed Studio XIAO ePaper Display Board (EN05) |
-| Display panel | 2.9" monochrome ePaper, 296 x 128, GDEY029T94 / FPC-A005 |
+| Display panel | 2.9" monochrome ePaper, 296 × 128 (landscape), GDEY029T94 / FPC-A005 |
 | Panel controller | SSD1680 |
 | Battery | Rechargeable LiPo, 500 mAh |
 | Enclosure | 3D printed, designed in OnShape |

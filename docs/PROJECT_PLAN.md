@@ -51,7 +51,7 @@ Systematic, phased development with each phase requiring manual signoff before p
 ### Deliverables
 - Working ePaper display with configurable text output
 - Documentation of refresh behavior and limitations
-- Display layout design with time and battery information
+- Display layout design with time and battery information, sized for **landscape** (296 wide × 128 tall)
 - Testing checklist for display validation
 
 ## Phase 3: Power Management Optimization
