@@ -104,7 +104,7 @@ void setup() {
         }
     }
 
-    BLE.setLocalName("eClock");
+    BLE.setLocalName("ePaper Clock");
     BLE.setAdvertisedService(timeService);
     timeService.addCharacteristic(timeCharacteristic);
     BLE.addService(timeService);
@@ -132,6 +132,10 @@ void loop() {
             g_time_synced = true;
             updateTimeStruct();
             g_needs_display_update = true;
+            
+            // Stop advertising to save battery now that we have the time
+            BLE.stopAdvertise();
+            Serial.println("Time synced. Advertising stopped.");
             
             // Flash green
             digitalWrite(LED_GREEN, LOW);
