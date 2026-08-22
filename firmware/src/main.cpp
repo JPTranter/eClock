@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <time.h>
 
 #if defined(ECLOCK_CORE_MBED)
 #include <ArduinoBLE.h>
@@ -48,6 +49,9 @@ static uint32_t g_last_sync_millis = 0;          // millis() when time was last 
 static uint32_t g_sync_attempt_start = 0;        // millis() when current attempt began
 static const uint32_t SYNC_INTERVAL = 10 * 60 * 1000UL;   // 10 minutes between re-syncs
 static const uint32_t SYNC_TIMEOUT  = 60 * 1000UL;         // 60 seconds max per attempt
+
+static uint8_t g_last_sync_hour = 0;
+static uint8_t g_last_sync_minute = 0;
 
 // Display state
 static bool g_needs_display_update = true;  // always draw on first loop
@@ -148,29 +152,38 @@ static void drawClockFace() {
                 char timeBuf[8];
                 snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", g_hour, g_minute);
 
+                // Calculate date string
+                time_t t = g_epoch + g_tz_offset;
+                struct tm *tm_info = gmtime(&t);
+                char dateBuf[32];
+                strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
+
+                // Date line at the top left
+                display.setFont(&FreeSans9pt7b);
+                display.setCursor(4, 18);
+                display.print(dateBuf);
+
                 // Use the big 84pt font for the time
                 display.setFont(&font);
 
                 // Centre the time string horizontally and vertically
-                // The font's glyph metrics have yOffset ≈ -78, so the baseline
-                // for the top of the glyph block is at:
-                //   (display.height() + abs(yOffset) - cap_height) / 2 + abs(yOffset)
-                // Simpler: centre it so the bulk of the glyph sits in the upper
-                // 3/4 of the screen, leaving room for status below.
                 int16_t tx, ty;
                 uint16_t tw, th;
                 display.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
-                // th is the full glyph bounding height (~61px for digits)
-                // Position it so the top of the time is at y = (128 - th - 20)
-                // giving ~20px below for the status line
+                
+                // Shift down slightly to leave room for the date at the top
+                // and the sync line at the bottom
                 display.setCursor((display.width() - tw) / 2 - tx,
                                   (display.height() - th) / 2 - ty);
                 display.print(timeBuf);
 
                 // Status line at the very bottom
+                char syncBuf[32];
+                snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u via HA", g_last_sync_hour, g_last_sync_minute);
+                
                 display.setFont(&FreeSans9pt7b);
                 display.setCursor(4, display.height() - 5);
-                display.print(F("Synced via HA"));
+                display.print(syncBuf);
                 break;
             }
         }
@@ -270,6 +283,8 @@ void loop() {
             g_state = STATE_RUNNING;
             g_last_sync_millis = now;
             updateTimeStruct();
+            g_last_sync_hour = g_hour;
+            g_last_sync_minute = g_minute;
             g_needs_display_update = true;
 
             // Shut down radio to save power now that we have the time
