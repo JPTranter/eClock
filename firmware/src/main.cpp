@@ -44,32 +44,25 @@ static uint32_t g_lastOpMs       = 0;   // duration of the last refresh operatio
 // ---------------------------------------------------------------------------
 // Panel power
 //
-// Generation A (pogo-pin EN04/EN05) gates the panel supply with a MOSFET on
-// EPD_POWER. Generation B (XIAO nRF52840 Plus + current EN05) has no such gate
-// -- the panel is always powered when the board is, via a physical switch --
-// so EPD_POWER is -1 and these become no-ops.
+// The EN05 gates the panel supply with a MOSFET on EPD_POWER (D6 = P1.11).
+// Nothing on the SPI bus matters until this is HIGH: the panel will accept
+// writes and do nothing, which reads exactly like a software bug.
 //
 // Kept as explicit calls because Phase 3 will want to measure the cost of
-// cutting the rail between updates where that is possible.
+// cutting this rail between updates.
 // ---------------------------------------------------------------------------
 static void panelPowerOn() {
-    if (EPD_POWER < 0) return;   // no gate on this hardware generation
     pinMode(EPD_POWER, OUTPUT);
     digitalWrite(EPD_POWER, HIGH);
     delay(50);   // let the rail settle before driving RST/SPI
 }
 
 static void panelPowerOff() {
-    if (EPD_POWER < 0) return;
     digitalWrite(EPD_POWER, LOW);
 }
 
 static void displayInit() {
-    if (EPD_POWER >= 0) {
-        Serial.println(F("[disp] powering panel (EPD_POWER HIGH)"));
-    } else {
-        Serial.println(F("[disp] no power gate on this board (always-on rail)"));
-    }
+    Serial.println(F("[disp] powering panel (EPD_POWER HIGH)"));
     panelPowerOn();
 
     Serial.println(F("[disp] display.init()"));
@@ -344,9 +337,8 @@ static void printStats() {
     Serial.print(EPD_DC);   Serial.print(F("/"));
     Serial.print(EPD_RST);  Serial.print(F("/"));
     Serial.println(EPD_BUSY);
-    Serial.print(F("  power gate           : "));
-    if (EPD_POWER < 0) Serial.println(F("none (always-on rail)"));
-    else               Serial.println(EPD_POWER);
+    Serial.print(F("  power gate           : D6 -> "));
+    Serial.println(EPD_POWER);
     Serial.print(F("  BUSY pin reads       : "));
     pinMode(EPD_BUSY, INPUT);
     Serial.print(digitalRead(EPD_BUSY));
@@ -408,9 +400,7 @@ void setup() {
     Serial.print(F(" DC="));              Serial.print(EPD_DC);
     Serial.print(F(" RST="));             Serial.print(EPD_RST);
     Serial.print(F(" BUSY="));            Serial.print(EPD_BUSY);
-    Serial.print(F(" PWR="));
-    if (EPD_POWER < 0) Serial.println(F("none (always-on)"));
-    else               Serial.println(EPD_POWER);
+    Serial.print(F(" PWR="));             Serial.println(EPD_POWER);
 
     printMenu();
     Serial.println(F("[boot] auto-initialising display..."));
