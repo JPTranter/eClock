@@ -37,11 +37,11 @@ static ClockState g_state = STATE_SYNCING;
 static int32_t  g_epoch = 0;            // seconds since 1970-01-01
 static int32_t  g_tz_offset = 0;        // UTC offset in seconds
 static uint32_t g_last_tick_millis = 0; // millis() of the most recent 1-second tick
-static uint8_t  g_seconds_since_display = 60;  // ticks since last display refresh
 
 // Time components for display
 static uint8_t g_hour = 0;
 static uint8_t g_minute = 0;
+static uint8_t g_second = 0;
 
 // Sync timing
 static uint32_t g_last_sync_millis = 0;          // millis() when time was last written
@@ -76,6 +76,7 @@ static void updateTimeStruct() {
     int32_t local_time = g_epoch + g_tz_offset;
     g_hour = (local_time / 3600) % 24;
     g_minute = (local_time / 60) % 60;
+    g_second = local_time % 60;
 }
 
 static void startSyncAttempt() {
@@ -268,7 +269,6 @@ void loop() {
             // Update state regardless of what it was
             g_state = STATE_RUNNING;
             g_last_sync_millis = now;
-            g_seconds_since_display = 60;  // trigger a display update on the next tick
             updateTimeStruct();
             g_needs_display_update = true;
 
@@ -350,9 +350,8 @@ void loop() {
         updateTimeStruct();
         g_last_tick_millis = now;
 
-        g_seconds_since_display++;
-        if (g_seconds_since_display >= 60) {
-            g_seconds_since_display = 0;
+        // Update display every minute when seconds hit 0
+        if (g_second == 0) {
             g_needs_display_update = true;
         }
     }
