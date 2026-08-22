@@ -7,8 +7,7 @@ Last updated: 2026-08-22
 
 ## Current phase
 
-**Phase 1 — Initial setup and environment validation.** Complete and verified on real
-hardware; awaiting your signoff. See `docs/testing/PHASE1_CHECKLIST.md` for evidence.
+**Phase 2 — Display functionality.** In progress. Phase 1 signed off 2026-08-22.
 
 ## Honest state of play
 
@@ -64,8 +63,8 @@ refresh, the Bluefruit bootloader hard fault — are still unverified prior art.
 
 | Phase | Signed off | Date | Notes |
 | --- | --- | --- | --- |
-| 1. Setup and validation | Awaiting | 2026-08-22 | All checks pass with captured evidence |
-| 2. Display functionality | No | — | Next up; prior art exists, not reproduced here |
+| 1. Setup and validation | **Yes** | 2026-08-22 | All checks pass with captured evidence |
+| 2. Display functionality | In progress | — | GxEPD2 on the real panel |
 | 3. Power management | No | — | Highest risk phase |
 | 4. Bluetooth integration | No | — | HA side drafted |
 | 5. Final refinement | No | — | |
