@@ -309,22 +309,22 @@ static void drawClockFace() {
                     icon_h = icon_synced_h;
                 }
                 
-                // Icon 2px from left, bottom edge 15px from bottom
-                int icon_y = display.height() - 15;
+                // Icon 2px from left, bottom edge 2px from panel bottom
+                int icon_y = display.height() - 2 - icon_h;
                 display.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
 
-                // Last successful sync time next to the icon
+                // Last successful sync time next to the icon, bottom-aligned with it
                 char syncTime[8];
                 snprintf(syncTime, sizeof(syncTime), "%02u:%02u", g_last_sync_hour, g_last_sync_minute);
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(2, display.height() - 15);  // align with icon
+                display.setCursor(2, display.height() - 2);  // baseline 2px from bottom
                 display.print(syncTime);
 
                 // AM/PM at the bottom right
                 int16_t apx, apy;
                 uint16_t apw, aph;
                 display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
-                display.setCursor(display.width() - apw - 2, display.height() - 15);
+                display.setCursor(display.width() - apw - 2, display.height() - 2);
                 display.print(ampm);
                 break;
             }
