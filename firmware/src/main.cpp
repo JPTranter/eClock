@@ -14,7 +14,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontMoirai84.h"  // 84pt Moirai One for time digits (0-9, :)
+#include "FontModak105.h"  // 105pt Modak for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -265,9 +265,9 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~22. Bottom text top edge is ~110.
                 // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
-                // Moirai 84pt has typical yOff=-99, h=67. Center of ink relative to
-                // baseline is -99 + 33.5 = -65.5. Baseline = 66 - (-65.5) = ~132.
-                display.setCursor((display.width() - tw) / 2 - tx, 132);
+                // Modak 105pt has typical yOff=-106, h=69. Center of ink relative
+                // to baseline is -106 + 34.5 = -71.5. Baseline = 66 - (-71.5) = 138.
+                display.setCursor((display.width() - tw) / 2 - tx, 138);
                 display.print(timeBuf);
 
                 // Status line at the very bottom right
