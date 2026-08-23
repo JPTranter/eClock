@@ -399,4 +399,27 @@ void loop() {
         drawClockFace();
         g_needs_display_update = false;
     }
+
+    // ---------------------------------------------------------------
+    // 6. Power Management (System ON Sleep)
+    // ---------------------------------------------------------------
+    // Calculate maximum time we can safely sleep while waiting for the next event.
+    // mbed's delay() automatically yields to the RTOS, placing the CPU in low-power WFE.
+    uint32_t sleep_time = 100; // Default fast polling for button latency
+
+    if (g_state == STATE_RUNNING) {
+        // We can sleep until the next 1-second tick
+        uint32_t elapsed_tick = millis() - g_last_tick_millis;
+        uint32_t time_to_tick = (elapsed_tick >= 1000) ? 0 : (1000 - elapsed_tick);
+        
+        // Don't sleep longer than 100ms so buttons remain responsive
+        sleep_time = min(time_to_tick, (uint32_t)100);
+    } else {
+        // While syncing, poll BLE frequently (50ms)
+        sleep_time = 50;
+    }
+
+    if (sleep_time > 0) {
+        delay(sleep_time);
+    }
 }
