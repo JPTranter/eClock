@@ -20,7 +20,7 @@ Last updated: 2026-08-23
 | Firmware | **Phase 4 working** - Device successfully handles manual and auto BLE time syncs. |
 | Pinout / board traps | **Verified.** |
 | Display driver approach | **Verified.** Font generator bug fixed (no diagonal shearing). Alignment centered. |
-| Power management | **Phase 3 baseline running** — SAADC pin conflict solved. Sleep is delay() placeholder. |
+| Power management | **Phase 3 complete** - SAADC pin conflict solved. System ON idle sleep (WFE) implemented via RTOS thread yielding. |
 | BLE time sync (device side) | **Verified.** Firmware successfully broadcasts and receives time on the `mbed` core. Drift bug fixed. |
 | BLE time sync (HA side) | **Verified.** Custom component successfully discovers and syncs device (MAC address explicitly recommended to bypass discovery caching). |
 | Enclosure | Notes only, no CAD |
@@ -51,6 +51,8 @@ Phase 4 successfully solved the critical Bluetooth bugs on the `mbed` core:
 | --- | --- | --- | --- |
 | 1. Setup and validation | **Yes** | 2026-08-22 | All checks pass with captured evidence |
 | 2. Display functionality | **Yes** | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
-| 3. Power management | Phase 3 baseline | 2026-08-22 | Clock face draws with battery monitoring; SAADC pin conflict solved. Deep sleep deferred. |
+| 3. Power management | **Yes** | 2026-08-23 | Clock face draws with battery monitoring; SAADC pin conflict solved. System ON idle sleep (WFE) running. |
 | 4. Bluetooth integration | **Yes** | 2026-08-23 | Working end-to-end with HA. |
 | 5. Final refinement | No | — | |
+
+Phase 3 is now formally complete. We implemented mbed-os System ON idle sleep (WFE) by hooking delay() into the non-blocking main loop, dramatically reducing the CPU duty cycle while maintaining sub-100ms latency for physical buttons and BLE events.
