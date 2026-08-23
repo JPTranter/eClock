@@ -341,6 +341,40 @@ g_last_tick_millis = now - (g_second * 1000);
 
 The first tick fires after `60 - 17 = 43` seconds (the partial interval to `:00`), advancing `g_epoch` by 43. Every subsequent tick fires after exactly 60 seconds, advancing by 60. The display always updates on the minute boundary with no jitter.
 
+## 12. Custom fonts with gfxfont_gen.py (verified 2026-08-23)
+
+### Generator workflow
+
+`firmware/tools/gfxfont_gen.py` renders a TrueType font at a given point size and generates an Adafruit GFX-compatible font header containing only the glyphs you request:
+
+```bash
+python firmware/tools/gfxfont_gen.py <ttf_path> <pt_size> <first_char> <last_char> <output.h>
+```
+
+Store **only the characters the display actually needs** — the clock only renders digits 0-9 and colon (ASCII 0x30-0x3A). For the 84pt Moirai One font, the bitmap data was 4.3 KB vs 33 KB for the full Arial Bold font.
+
+### Glyph alignment
+
+Each glyph in the GFXglyph table has a `yOffset` field (6th column). This is a signed offset from the baseline. When glyphs from the same font have different natural baselines (like a colon that sits higher than digits), you must manually adjust the colon's yOffset for visual vertical centering. For the Moirai 84pt font, the colon was at yOffset=-102 (floating above digits) and needed to be moved to yOffset=-86 to align its midpoint with the digits' midpoint.
+
+### Centering on the ePaper
+
+The `FontHuge7b.h` comment had hardcoded centering math for the Arial Bold 105pt font. After swapping fonts, the `setCursor` y-coordinate must be recalculated from the new font's glyph metrics: typical g.yOffset ≈ -99, typical glyph height ≈ 67, so the ink midpoint is at -99 + 33.5 = -65.5, and the baseline for vertical centering between the date line (bottom at ~22) and status line (top at ~110) is 66 - (-65.5) ≈ 132.
+
+## 13. USB power detection via VBUS register (verified 2026-08-23)
+
+The nRF52840's `POWER` peripheral includes a `USBREGSTATUS` register with a `VBUSDETECT` bit that is set when VBUS voltage is above the valid threshold. This does not require initialising the USB stack — it is a purely hardware level detection available at any time:
+
+```cpp
+if (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
+    // USB cable connected — skip battery ADC, show "USB" on display
+}
+```
+
+**Register location:** `NRF_POWER` (base address 0x40000000), `USBREGSTATUS` at offset 0x00C, bit 0 = `VBUSDETECT`. Definitions come from the CMSIS-SVD headers (`nrf52840_bitfields.h`).
+
+When USB is connected, the battery voltage divider reading is invalid (VBUS overrides the voltage). The `getBatteryPercent()` function returns -1 when VBUS is detected, and the display renders "USB" instead of a percentage.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2

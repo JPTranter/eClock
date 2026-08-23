@@ -14,7 +14,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontHuge7b.h"   // 105pt Arial Bold for the time digits (0-9, :)
+#include "FontMoirai84.h"  // 84pt Moirai One for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -133,6 +133,13 @@ static void startSyncAttempt() {
 // ==== Display helpers ==========================================================
 
 static int getBatteryPercent() {
+    // If USB is connected, VBUS overrides the battery voltage — the divider
+    // reading would show ~5V and the percentage calculation would be junk.
+    // Skip the ADC and just show "USB" on the display instead.
+    if (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
+        return -1;  // caller renders "USB"
+    }
+    
     // Enable battery divider
     pinMode(14, OUTPUT);
     digitalWrite(14, LOW);
@@ -236,7 +243,12 @@ static void drawClockFace() {
                 
                 // Battery line at the top right
                 char batBuf[8];
-                snprintf(batBuf, sizeof(batBuf), "%d%%", getBatteryPercent());
+                int batPct = getBatteryPercent();
+                if (batPct < 0) {
+                    snprintf(batBuf, sizeof(batBuf), "USB");
+                } else {
+                    snprintf(batBuf, sizeof(batBuf), "%d%%", batPct);
+                }
                 int16_t bx, by;
                 uint16_t bw, bh;
                 display.getTextBounds(batBuf, 0, 0, &bx, &by, &bw, &bh);
@@ -253,9 +265,9 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~22. Bottom text top edge is ~110.
                 // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
-                // Time font has th=76, ty=-97. Center of time text relative to baseline is -97 + 38 = -59.
-                // So baseline should be 66 - (-59) = 125 to perfectly center the ink between the two rows.
-                display.setCursor((display.width() - tw) / 2 - tx, 125);
+                // Moirai 84pt has typical yOff=-99, h=67. Center of ink relative to
+                // baseline is -99 + 33.5 = -65.5. Baseline = 66 - (-65.5) = ~132.
+                display.setCursor((display.width() - tw) / 2 - tx, 132);
                 display.print(timeBuf);
 
                 // Status line at the very bottom right
