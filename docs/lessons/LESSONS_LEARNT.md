@@ -550,8 +550,49 @@ The tool automatically:
 The font file `MaterialIcons-Regular.ttf` is ~350 KB — far too large to
 embed in firmware (current firmware is ~360 KB total flash including
 all code). Instead, only the three needed glyphs are extracted as tiny
-manual bitmaps (~76 bytes total). This is the correct trade-off for
+manual bitmaps (~148 bytes total). This is the correct trade-off for
 constrained flash.
+
+### Icon size and vertical alignment
+
+Icons were first extracted at **14pt** (14×13px, auto-trimmed). The
+fixed 1-bit rendering loses anti-aliasing, so the minimum readable size
+is about 14pt (where the check circle icon has ~55% pixel fill). Going
+higher to **17pt** gives larger glyphs (17×16 for circle icons vs the
+~11px height of FreeSans9pt text) and is a better visual match for the
+status line.
+
+When positioning an icon next to text rendered by FreeSans9pt7b:
+
+```cpp
+// DON'T do this (icon extends above text):
+int icon_y = display.height() - 5 - icon_h;
+
+// DO this (icon top aligns with text top):
+int icon_y = display.height() - 5 - 12;  // 12px caps height
+```
+
+The icon's bottom edge should not align with the text's baseline.
+FreeSans9pt7b's yOffset means text extends upward from the baseline,
+so the icon needs a fixed offset from the baseline that matches the
+text's cap height (~12px rather than the icon's full height of 17px).
+
+### icon_tool.py — --no-trim flag (added later)
+
+By default, `icon_tool.py` trims empty rows and columns from each
+glyph's bounding box to minimise bitmap data. This shrinks the
+check_circle from 17×16 to 15×15, which causes alignment to shift
+between icons of different shapes. Pass `--no-trim` to preserve the
+raw glyph dimensions from the font:
+
+```bash
+python icon_tool.py batch "MaterialIcons-Regular.ttf" 17 \
+    --icons "synced=0xE86C,failed=0xE000,syncing=0xE5D5" \
+    --header material_icons.h --guard "ECLOCK_MATERIAL_ICONS_H" --no-trim
+```
+
+This ensures all icons use the same coordinate space, making pixel
+positions consistent in `drawBitmap()` calls.
 
 ## Reference resources
 

@@ -3,14 +3,26 @@
 eClock Icon Tool — Extract glyphs from an icon font as 1-bit C bitmap arrays.
 
 Usage:
-    # Export a single icon
+    # Export a single icon (auto-trimmed to content)
     python icon_tool.py export "C:/path/to/icons.ttf" 14 0xE86C
 
-    # Batch export named icons
+    # Export with no trimming (preserves raw glyph bounding box)
+    python icon_tool.py export "C:/path/to/icons.ttf" 14 0xE86C --no-trim
+
+    # Batch export named icons (auto-trimmed)
     python icon_tool.py batch "C:/path/to/icons.ttf" 14 \
         --icons "check=0xE86C,error=0xE000,refresh=0xE5D5" \
         --header "path/to/material_icons.h" \
         --guard "ECLOCK_MATERIAL_ICONS_H"
+
+    # Batch export with no trimming
+    python icon_tool.py batch "C:/path/to/icons.ttf" 14 \
+        --icons "check=0xE86C,error=0xE000,refresh=0xE5D5" --no-trim
+
+The tool automatically:
+- Renders the glyph at the requested size
+- Trims empty rows/columns by default (use --no-trim to preserve raw size)
+- Packs to MSB-first byte arrays in PROGMEM format
 
 Depends on Pillow: pip install Pillow
 """
@@ -25,7 +37,7 @@ except ImportError:
     sys.exit(1)
 
 
-def export_glyph(font_path, pt_size, codepoint):
+def export_glyph(font_path, pt_size, codepoint, no_trim=False):
     """Render a glyph and return the row-trimmed bitmap data + size."""
 
     font = ImageFont.truetype(font_path, pt_size)
@@ -43,6 +55,26 @@ def export_glyph(font_path, pt_size, codepoint):
     img = Image.new('1', (w, h), 1)
     draw = ImageDraw.Draw(img)
     draw.text((-bbox[0], -bbox[1]), char, font=font, fill=0)
+
+    pixels = img.load()
+
+    # When no_trim is True, skip all trimming and pack the raw glyph
+    if no_trim:
+        bytes_out = []
+        for y in range(h):
+            byte = 0
+            bits = 0
+            for x in range(w):
+                if pixels[x, y] == 0:
+                    byte |= (1 << (7 - bits))
+                bits += 1
+                if bits == 8:
+                    bytes_out.append(byte)
+                    byte = 0
+                    bits = 0
+            if bits > 0:
+                bytes_out.append(byte)
+        return bytes_out, w, h
 
     # Trim empty rows from top and bottom
     pixels = img.load()
@@ -153,7 +185,7 @@ def cmd_export(ttf_path, pt_size, codepoint_hex):
     print(format_c_array(name, result, w, h))
 
 
-def cmd_batch(ttf_path, pt_size, icons_str, header_path=None, guard=None):
+def cmd_batch(ttf_path, pt_size, icons_str, header_path=None, guard=None, no_trim=False):
     """Batch export multiple icons and write to a header file."""
     if not os.path.exists(ttf_path):
         print(f"ERROR: file not found: {ttf_path}")
@@ -186,7 +218,7 @@ def cmd_batch(ttf_path, pt_size, icons_str, header_path=None, guard=None):
         lines.append("")
 
     for name, cp in icons.items():
-        result, w, h = export_glyph(ttf_path, pt_size, cp)
+        result, w, h = export_glyph(ttf_path, pt_size, cp, no_trim)
         if result is None or h == 0:
             print(f"WARNING: could not render '{name}' (U+{cp:04X}), skipping")
             continue
@@ -229,6 +261,7 @@ def main():
         icons_str = None
         header_path = None
         guard = None
+        no_trim = False
 
         i = 4
         while i < len(sys.argv):
@@ -241,6 +274,9 @@ def main():
             elif sys.argv[i] == "--guard" and i + 1 < len(sys.argv):
                 guard = sys.argv[i + 1]
                 i += 2
+            elif sys.argv[i] == "--no-trim":
+                no_trim = True
+                i += 1
             else:
                 i += 1
 
@@ -248,7 +284,7 @@ def main():
             print("ERROR: --icons is required for batch command")
             sys.exit(1)
 
-        cmd_batch(ttf, pt, icons_str, header_path, guard)
+        cmd_batch(ttf, pt, icons_str, header_path, guard, no_trim)
 
     else:
         print(f"Unknown command: {cmd}")

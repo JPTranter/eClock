@@ -301,8 +301,8 @@ static void drawClockFace() {
                     icon_h = icon_synced_h;
                 }
                 
-                // Icon bottom aligns with text baseline
-                int icon_y = display.height() - 5 - icon_h;
+                // Icon vertically aligns with the top of FreeSans9pt text
+                int icon_y = display.height() - 5 - 12;  // 12px to align with ~11px text
                 display.drawBitmap(4, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
 
                 // Last successful sync time next to the icon
