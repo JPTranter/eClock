@@ -97,6 +97,49 @@ static void startSyncAttempt() {
 
 // ==== Display helpers ==========================================================
 
+static int getBatteryPercent() {
+    // Enable battery divider
+    pinMode(14, OUTPUT);
+    digitalWrite(14, LOW);
+    delay(10); // stabilize
+    
+    analogReadResolution(12);
+    int raw = analogRead(32); // PIN_VBAT is P0.31 (32)
+    
+    // Disable divider
+    digitalWrite(14, HIGH);
+    
+    // Reclaim P0.31 from the SAADC peripheral so EPD_DC can use it again
+    NRF_SAADC->TASKS_STOP = 1;
+    while (NRF_SAADC->EVENTS_STOPPED == 0) {}
+    NRF_SAADC->EVENTS_STOPPED = 0;
+    NRF_SAADC->ENABLE = 0;
+    
+    for (int ch = 0; ch < 8; ch++) {
+        NRF_SAADC->CH[ch].PSELP = 0xFFFFFFFFUL;
+        NRF_SAADC->CH[ch].PSELN = 0xFFFFFFFFUL;
+    }
+    
+    NRF_GPIO->PIN_CNF[31] =
+        (GPIO_PIN_CNF_DIR_Output   << GPIO_PIN_CNF_DIR_Pos)   |
+        (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) |
+        (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos)  |
+        (GPIO_PIN_CNF_DRIVE_S0S1   << GPIO_PIN_CNF_DRIVE_Pos) |
+        (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos);
+        
+    NRF_GPIO->OUTCLR = (1UL << 31);
+    
+    // Calculate battery percentage (assuming 12-bit, Vref=3.6V, 1/2 divider)
+    float vbat = (raw * 7.2f) / 4096.0f;
+    
+    // Map 3.3V (empty) to 4.2V (full)
+    int pct = (int)((vbat - 3.3f) / (4.2f - 3.3f) * 100.0f);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    
+    return pct;
+}
+
 static void drawClockFace() {
     display.setPartialWindow(0, 0, display.width(), display.height());
     display.firstPage();
@@ -168,6 +211,15 @@ static void drawClockFace() {
                 display.setFont(&FreeSans9pt7b);
                 display.setCursor(4, 18);
                 display.print(dateBuf);
+                
+                // Battery line at the top right
+                char batBuf[8];
+                snprintf(batBuf, sizeof(batBuf), "%d%%", getBatteryPercent());
+                int16_t bx, by;
+                uint16_t bw, bh;
+                display.getTextBounds(batBuf, 0, 0, &bx, &by, &bw, &bh);
+                display.setCursor(display.width() - bw - 4, 18);
+                display.print(batBuf);
 
                 // Use the big 84pt font for the time
                 display.setFont(&font);
