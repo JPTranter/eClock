@@ -110,11 +110,6 @@ static int getBatteryPercent() {
     digitalWrite(14, HIGH);
     
     // Reclaim P0.31 from the SAADC peripheral so EPD_DC can use it again
-    NRF_SAADC->TASKS_STOP = 1;
-    while (NRF_SAADC->EVENTS_STOPPED == 0) {}
-    NRF_SAADC->EVENTS_STOPPED = 0;
-    NRF_SAADC->ENABLE = 0;
-    
     for (int ch = 0; ch < 8; ch++) {
         NRF_SAADC->CH[ch].PSELP = 0xFFFFFFFFUL;
         NRF_SAADC->CH[ch].PSELN = 0xFFFFFFFFUL;
