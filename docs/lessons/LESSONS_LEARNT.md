@@ -430,6 +430,47 @@ Key detail: when the panel is unpowered between 11pm and 5am, the SSD1680 contro
 
 *Note: the 15-minute button cooldown adds some awake time during the night, reducing the savings slightly. Each button-press-wake episode costs ~3.5 mAh (3.4s re-init + 15 min of normal operation), so ~1 night of occasional reading.*
 
+## 15. 12-hour display format and font_tool.py (verified 2026-08-23)
+
+### 12-hour conversion
+
+The clock display was changed from 24-hour (`%02u:%02u` with leading zero)
+to 12-hour (`%u:%02u` with leading zero suppressed) to match typical
+bedside clock expectations:
+
+```cpp
+uint8_t disp_hour = g_hour % 12;
+if (disp_hour == 0) disp_hour = 12;
+const char* ampm = (g_hour < 12) ? "AM" : "PM";
+```
+
+The status line ("Synced HH:MM") moved from the **bottom right** to the
+**bottom left**, with "AM" / "PM" occupying the bottom right. This avoids
+the sync time and AM/PM overlapping when both are rendered in FreeSans9pt.
+
+### 12-hour times are narrower — bigger font
+
+Because the leading zero is suppressed, `8:00` is 4 characters instead of
+5, and even `10:00` is only one character wider than `12:34` rather than
+a full digit wider. This allowed bumping the font from Chango 80pt
+(which barely fit 24-hour `08:02`) to **Chango 82pt** (which fits all
+12-hour times with at least 1px margin).
+
+### font_tool.py — the all-in-one font utility
+
+`firmware/tools/font_tool.py` consolidates everything learned across
+four font swaps into three commands:
+
+| Command | Function |
+|---------|----------|
+| `scan` | Scans every 2pt from 60–128, checking both 12h and 24h fit |
+| `generate` | Runs gfxfont_gen.py, adds copyright, prints centering math + `setCursor` line |
+| `center` | Reads an existing GFXfont header and prints the centering calculation |
+
+The tool automatically detects whether the colon's yOffset needs manual
+adjustment (difference >5 px from digit midpoints), and computes the
+correct baseline_y for the centering formula.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2

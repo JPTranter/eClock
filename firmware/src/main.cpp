@@ -14,7 +14,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango80.h"  // 80pt Chango for time digits (0-9, :)
+#include "FontChango82.h"  // 82pt Chango for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -235,8 +235,13 @@ static void drawClockFace() {
             // ---------------------------------------------------------------
             case STATE_RUNNING:
             draw_running_face: {
+                // Convert 24h to 12h display, suppress leading zero
+                uint8_t disp_hour = g_hour % 12;
+                if (disp_hour == 0) disp_hour = 12;
+                const char* ampm = (g_hour < 12) ? "AM" : "PM";
+
                 char timeBuf[8];
-                snprintf(timeBuf, sizeof(timeBuf), "%02u:%02u", g_hour, g_minute);
+                snprintf(timeBuf, sizeof(timeBuf), "%u:%02u", disp_hour, g_minute);
 
                 // Calculate date string
                 time_t t = g_epoch + g_tz_offset;
@@ -263,7 +268,7 @@ static void drawClockFace() {
                 display.setCursor(display.width() - bw - 4, 18);
                 display.print(batBuf);
 
-                // Use the big 84pt font for the time
+                // Use the big time font
                 display.setFont(&font);
 
                 // Centre the time string horizontally
@@ -273,12 +278,12 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~22. Bottom text top edge is ~110.
                 // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
-                // Chango 80pt has typical yOff=-82, h=60. Center of ink relative
-                // to baseline is -82 + 30 = -52. Baseline = 66 - (-52) = 118.
-                display.setCursor((display.width() - tw) / 2 - tx, 118);
+                // Chango 82pt has typical yOff=-84, h=61. Center of ink relative
+                // to baseline is -84 + 30.5 = -53.5. Baseline = 66 - (-53.5) = 120.
+                display.setCursor((display.width() - tw) / 2 - tx, 120);
                 display.print(timeBuf);
 
-                // Status line at the very bottom right
+                // Synced status line at the bottom left
                 char syncBuf[32];
                 if (g_state == STATE_RESYNCING || g_state == STATE_SYNCING) {
                     snprintf(syncBuf, sizeof(syncBuf), "Syncing...");
@@ -292,8 +297,15 @@ static void drawClockFace() {
                 int16_t sx, sy;
                 uint16_t sw, sh;
                 display.getTextBounds(syncBuf, 0, 0, &sx, &sy, &sw, &sh);
-                display.setCursor(display.width() - sw - 4, display.height() - 5);
+                display.setCursor(4, display.height() - 5);
                 display.print(syncBuf);
+
+                // AM/PM at the bottom right
+                int16_t apx, apy;
+                uint16_t apw, aph;
+                display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
+                display.setCursor(display.width() - apw - 4, display.height() - 5);
+                display.print(ampm);
                 break;
             }
 

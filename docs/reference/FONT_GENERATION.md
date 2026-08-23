@@ -4,14 +4,37 @@
 > 296×128 ePaper display. Written for the next developer (human or AI)
 > who needs to swap the time font.
 
-## Toolchain
+## Quickest path: font_tool.py (recommended)
+
+The all-in-one tool at `firmware/tools/font_tool.py` wraps the entire
+workflow — sizing scan → generation → centering math — in a single
+command. It depends on Pillow (`pip install Pillow`).
+
+```bash
+# Step 1: Scan sizes
+python firmware/tools/font_tool.py scan "C:/path/to/font.ttf"
+
+# Step 2: Generate header at the recommended size
+python firmware/tools/font_tool.py generate "C:/path/to/font.ttf" 82 \
+    firmware/src/FontName.h \
+    --copyright "Copyright (c) 2024, Type Foundry"
+
+# Step 3: Check centering from an existing header
+python firmware/tools/font_tool.py center firmware/src/FontName.h
+```
+
+The `generate` command prints the exact `setCursor` line to paste into
+`drawClockFace()`, shows width checks for common time strings, and
+detects whether the colon needs yOffset adjustment.
+
+## Toolchain (low-level)
 
 ```
 TrueType (.ttf)  ──→  gfxfont_gen.py  ──→  GFXfont header (.h)
 ```
 
-The generator lives at `firmware/tools/gfxfont_gen.py`. It depends on
-Pillow (`pip install Pillow`). Usage:
+The low-level generator lives at `firmware/tools/gfxfont_gen.py`.
+Usage:
 
 ```bash
 python firmware/tools/gfxfont_gen.py <ttf_path> <pt_size> <first> <last> <output.h>
@@ -84,17 +107,19 @@ for pt in [72, 84, 96, 105, 110, 120]:
 
 For wide typefaces like Chango, you may not be able to satisfy both
 horizontal and vertical fill simultaneously at any single point size.
-Chango at 80pt is the practical maximum:
+Chango at 82pt is the practical maximum for 12-hour display (no leading
+zero, so "10:00" is the widest string at 293 px):
 
 | Time string | Width | Margin | Fits? |
 |---|---|---|---|
-| `12:34` | 282 px | 7 px each side | Comfortably |
-| `08:02` | 302 px | -3 px each side | ~1 digit-stroke clips off left/right |
-| `00:00` | 310 px | -7 px each side | ~2 pixels clip |
+| `12:34` | 290 px | 3 px each side | Comfortably |
+| `10:00` | 293 px | **1 px** each side | Tight, but OK |
+| `8:00` | 238 px | 29 px each side | Plenty of room |
 
-Since `12:34` is the dominant display and even `08:02` only loses a
-hairline, 80pt gives the best vertical presence without visible
-clipping in practice.
+Since `12:34` is the dominant display and the worst case `10:00` still
+fits, 82pt gives the best vertical presence (48% ink fill). For 24-hour
+mode the widest string is `04:00` (317 px at 82pt) so you'd need to drop
+to 74pt to keep 24-hour times within bounds.
 
 ## Step 2: Generate the header
 
