@@ -15,7 +15,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango82.h"  // 82pt Chango for time digits (0-9, :)
+#include "FontChango80.h"  // 80pt Chango for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -199,11 +199,11 @@ static void drawClockFace() {
                 uint16_t ew, eh;
                 display.getTextBounds(errMsg, 0, 0, &ex, &ey, &ew, &eh);
                 display.setCursor((display.width() - ew) / 2 - ex,
-                                  (display.height() + eh) / 2 - 8);
+                                  (display.height() + eh) / 2);
                 display.print(errMsg);
 
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(4, display.height() - 5);
+                display.setCursor(0, display.height());
                 display.print(F("Press any button to sync"));
                 break;
             }
@@ -225,7 +225,7 @@ static void drawClockFace() {
                 uint16_t mw, mh;
                 display.getTextBounds(msg, 0, 0, &mx, &my, &mw, &mh);
                 display.setCursor((display.width() - mw) / 2 - mx,
-                                  (display.height() + mh) / 2 - 8);
+                                  (display.height() + mh) / 2);
                 display.print(msg);
                 
                 break;
@@ -252,14 +252,14 @@ static void drawClockFace() {
 
                 // Date line at the top left
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(4, 18);
+                display.setCursor(2, 12);
                 display.print(dateBuf);
                 
                 // Battery line at the top right
                 int batPct = getBatteryPercent();
                 if (batPct < 0) {
                     // USB power: bolt icon only, no text
-                    display.drawBitmap(display.width() - 4 - icon_bolt_w, 6,
+                    display.drawBitmap(display.width() - 2 - icon_bolt_w, 2,
                         icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, GxEPD_BLACK);
                 } else {
                     // Battery: battery icon + percentage
@@ -269,11 +269,11 @@ static void drawClockFace() {
                     int16_t bx, by;
                     uint16_t bw, bh;
                     display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
-                    int text_x = display.width() - 4 - icon_battery_w - 4 - bw;
-                    int icon_x = display.width() - 4 - icon_battery_w;
-                    display.drawBitmap(icon_x, 6,
+                    int text_x = display.width() - 2 - icon_battery_w - 2 - bw;
+                    int icon_x = display.width() - 2 - icon_battery_w;
+                    display.drawBitmap(icon_x, 2,
                         icon_battery_bitmap, icon_battery_w, icon_battery_h, GxEPD_BLACK);
-                    display.setCursor(text_x, 18);
+                    display.setCursor(text_x, 12);
                     display.print(pctBuf);
                 }
 
@@ -285,11 +285,11 @@ static void drawClockFace() {
                 uint16_t tw, th;
                 display.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
                 
-                // Top text bottom edge is ~22. Bottom text top edge is ~110.
-                // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
-                // Chango 82pt has typical yOff=-84, h=61. Center of ink relative
-                // to baseline is -84 + 30.5 = -53.5. Baseline = 66 - (-53.5) = 120.
-                display.setCursor((display.width() - tw) / 2 - tx, 120);
+                // Top text bottom edge is ~16. Bottom text top edge is ~114.
+                // Available space is 114 - 16 = 98 pixels. Center is 16 + 49 = 65.
+                // Chango 80pt has typical yOff=-82, h=60. Center of ink relative
+                // to baseline is -82 + 30 = -52. Baseline = 65 - (-52) = 117.
+                display.setCursor((display.width() - tw) / 2 - tx, 117);
                 display.print(timeBuf);
 
                 // Status icon + last sync time at the bottom left
@@ -309,22 +309,22 @@ static void drawClockFace() {
                     icon_h = icon_synced_h;
                 }
                 
-                // Icon vertically aligns with the top of FreeSans9pt text
-                int icon_y = display.height() - 5 - 15;  // 15px for ~19px icons (was 12px for 16px)
-                display.drawBitmap(4, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
+                // Icon 2px from left, bottom edge 15px from bottom
+                int icon_y = display.height() - 15;
+                display.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
 
                 // Last successful sync time next to the icon
                 char syncTime[8];
                 snprintf(syncTime, sizeof(syncTime), "%02u:%02u", g_last_sync_hour, g_last_sync_minute);
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(4 + icon_w + 4, display.height() - 5);
+                display.setCursor(2, display.height() - 15);  // align with icon
                 display.print(syncTime);
 
                 // AM/PM at the bottom right
                 int16_t apx, apy;
                 uint16_t apw, aph;
                 display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
-                display.setCursor(display.width() - apw - 4, display.height() - 5);
+                display.setCursor(display.width() - apw - 2, display.height() - 15);
                 display.print(ampm);
                 break;
             }
