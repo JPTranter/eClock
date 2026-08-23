@@ -135,6 +135,18 @@ static void startSyncAttempt() {
     BLE.setLocalName("ePaper Clock");
     BLE.setDeviceName("ePaper Clock");
     BLE.setAdvertisedService(timeService);
+    
+    // Add a changing manufacturer data byte so Home Assistant doesn't deduplicate
+    // the advertisement if we restart advertising within its cache window.
+    static uint8_t adv_counter = 0;
+    adv_counter++;
+    // Use an arbitrary Company ID (e.g., 0xFFFF for testing) + our counter
+    static uint8_t mfg_data[3];
+    mfg_data[0] = 0xFF;
+    mfg_data[1] = 0xFF;
+    mfg_data[2] = adv_counter;
+    BLE.setManufacturerData(mfg_data, sizeof(mfg_data));
+    
     BLE.advertise();
     g_sync_attempt_start = millis();
 }

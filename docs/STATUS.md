@@ -30,11 +30,13 @@ Phase 4 successfully solved the critical Bluetooth bugs on the `mbed` core:
 1. **ArduinoBLE Advertisement Bug:** `BLE.advertise()` fails to restart after `BLE.stopAdvertise()` unless GAP parameters (`setLocalName`, `setDeviceName`, `setAdvertisedService`) are explicitly re-applied.
 2. **Integer Underflow:** Timeouts using `millis()` must carefully ensure the `now` timestamp isn't captured before a blocking operation, or it underflows and instantly times out.
 3. **Time Drift:** Display updates must align with `local_time % 60 == 0`, not just a blind 60-second counter from the sync event.
-4. **HA Discovery Caching:** `async_discovered_service_info` is highly susceptible to dropping connectable flags or names from the cache if it misses a scan response. Bypassing it with a direct MAC address is the best workaround.
+4. **HA Discovery Caching:** `async_discovered_service_info` relies on scan responses which are flaky. Matching by the standard Time Service UUID (`1805`) conflicts with smartwatches. Passing multiple explicit MAC addresses (`mac_addresses`) in config is the most reliable approach.
+5. **HA GATT Caching:** Flashing updated firmware during dev requires forcefully calling `clear_cache()` in Bleak so HA sees newly exposed characteristics.
+6. **HA Deduplication:** HA aggressively deduplicates identical BLE advertisements. A rolling counter added to `ManufacturerData` successfully forces HA to trigger a fresh time sync on every button press.
 
 ## Immediate next steps
 
-1. Sign off Phase 4 now that sync works end-to-end.
+1. Begin Phase 5 (Final refinement) to clean up code and finalize mechanical integration.
 2. Re-visit Phase 3 deep sleep implementation now that BLE is working, to ensure battery life can hit the target.
 3. Characterise true power consumption in sleep vs advertising.
 

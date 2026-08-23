@@ -30,10 +30,13 @@ Copy the component into your Home Assistant config directory:
 <config>/custom_components/epaper_clock/__init__.py
 ```
 
-Enable it in `configuration.yaml`:
+Enable it in `configuration.yaml`. It is **highly recommended** to specify the clock's MAC address (or addresses) to avoid conflicting with other devices that broadcast the same Current Time Service (like Apple Watches):
 
 ```yaml
 epaper_clock:
+  mac_addresses:
+    - "AA:BB:CC:DD:EE:FF"
+    - "11:22:33:44:55:66"
 ```
 
 Restart Home Assistant. You will need the Bluetooth integration set up and a working
