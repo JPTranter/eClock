@@ -15,7 +15,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango80.h"  // 80pt Chango for time digits (0-9, :)
+#include "FontChango82.h"  // 82pt Chango for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -287,9 +287,9 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~16. Bottom text top edge is ~114.
                 // Available space is 114 - 16 = 98 pixels. Center is 16 + 49 = 65.
-                // Chango 80pt has typical yOff=-82, h=60. Center of ink relative
-                // to baseline is -82 + 30 = -52. Baseline = 65 - (-52) = 117.
-                display.setCursor((display.width() - tw) / 2 - tx, 117);
+                // Chango 82pt has typical yOff=-84, h=62. Center of ink relative
+                // to baseline is -84 + 31 = -53. Baseline = 65 - (-53) = 118.
+                display.setCursor((display.width() - tw) / 2 - tx, 118);
                 display.print(timeBuf);
 
                 // Status icon + last sync time at the bottom left
@@ -309,22 +309,23 @@ static void drawClockFace() {
                     icon_h = icon_synced_h;
                 }
                 
-                // Icon 2px from left, bottom edge 2px from panel bottom
-                int icon_y = display.height() - 2 - icon_h;
+                // Icon vertically centred with text, both shifted up to fit 2px bottom margin
+                // text_mid ≈ 116 (midpoint of h-2 - icon_h/2 zone), icon_y = text_mid - icon_h/2
+                int icon_y = display.height() - 2 - 10 - icon_h / 2;  // ≈106 for 19px icon
                 display.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
 
-                // Last successful sync time next to the icon, bottom-aligned with it
+                // Last successful sync time to the right of the icon
                 char syncTime[8];
                 snprintf(syncTime, sizeof(syncTime), "%02u:%02u", g_last_sync_hour, g_last_sync_minute);
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(2, display.height() - 2);  // baseline 2px from bottom
+                display.setCursor(2 + icon_w + 2, display.height() - 2 - 5);  // baseline shifted up to centre with icon
                 display.print(syncTime);
 
                 // AM/PM at the bottom right
                 int16_t apx, apy;
                 uint16_t apw, aph;
                 display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
-                display.setCursor(display.width() - apw - 2, display.height() - 2);
+                display.setCursor(display.width() - apw - 2, display.height() - 2 - 4);
                 display.print(ampm);
                 break;
             }

@@ -28,9 +28,11 @@ except ImportError:
 
 DISPLAY_W = 296
 DISPLAY_H = 128
-DATE_BASELINE = 22     # bottom of date line
-STATUS_TOP = 110       # top of status line
-GAP_CENTER = 66        # vertical centre of the 88px gap between date and status
+MARGIN = 2               # px padding from panel edge
+DATE_TOP = 16            # bottom of date line (baseline 12 + text_h ~4)
+STATUS_TOP = 114         # top of status line (icon top ~107, text top ~111)
+AVAILABLE = STATUS_TOP - DATE_TOP   # 98 px vertical gap for time
+GAP_CENTER = DATE_TOP + AVAILABLE // 2  # 65 px centre of the gap
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -403,6 +405,54 @@ def cmd_center(header_path):
     print()
 
 
+def cmd_layout(ttf_path, pt_size, is12h=True):
+    """Print full layout constants including centering for the firmware."""
+    font = ImageFont.truetype(ttf_path, int(pt_size))
+    ink_h, avg_yoff, widths, colon_w = get_metrics(font)
+
+    midpoint = avg_yoff + ink_h / 2
+    baseline = GAP_CENTER - midpoint
+
+    # Width check
+    usable_w = DISPLAY_W - 2 * MARGIN
+    times = ['12:34', '10:00', '8:00', '11:11', '12:00', '1:00', '9:58'] if is12h else \
+            ['10:00', '08:02', '12:34', '23:45', '00:00']
+    max_w = max(sum(widths.get(c, 0) for c in t) for t in times)
+    max_t = [t for t in times if sum(widths.get(c, 0) for c in t) == max_w][0]
+
+    print(f"── Layout for {os.path.basename(ttf_path)} at {pt_size}pt ──")
+    print(f"  Display:    {DISPLAY_W}×{DISPLAY_H} px  (MARGIN={MARGIN}px each side)")
+    print(f"  Usable:     {usable_w}×{DISPLAY_H} px")
+    print()
+    print(f"  Font metrics:")
+    print(f"    yOff (avg) = {avg_yoff}")
+    print(f"    ink_h      = {ink_h}")
+    print(f"    ink_mid    = {midpoint:.1f}")
+    print()
+    print(f"  Vertical centering:")
+    print(f"    Date bottom ~ {DATE_TOP} px  (baseline 12, text ~4 px)")
+    print(f"    Status top  ~ {STATUS_TOP} px  (icon top ~107, text ~111)")
+    print(f"    Gap         = {AVAILABLE} px")
+    print(f"    Centre      = {GAP_CENTER} px")
+    print(f"    Baseline_y  = {int(round(baseline))}")
+    print()
+    print(f"  Horizontal (12h, worst case '{max_t}'):")
+    print(f"    Width       = {max_w} px  (usable {usable_w} px)")
+    if max_w <= usable_w:
+        print(f"    Margin      = +{(usable_w - max_w) // 2} px each side")
+    else:
+        print(f"    OVERFLOW    = {max_w - usable_w} px")
+    print()
+    print(f"── setCursor line ──")
+    print(f'  display.setCursor((display.width() - tw) / 2 - tx, {int(round(baseline))});')
+    print()
+    print(f"── Include line ──")
+    print(f'  #include "FontChango{pt_size}.h"  // {pt_size}pt Chango for time digits')
+    print()
+    print(f"── Sprite regeneration ──")
+    print(f"  python firmware/tools/icon_tool.py sprite \"{ttf_path}\" {pt_size}")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -413,6 +463,7 @@ def main():
         print("  scan    <ttf_path>              — size scan")
         print("  generate <ttf> <pt> <output.h>  — generate + centering")
         print("  center  <header.h>              — centering from existing header")
+        print("  layout  <ttf> <pt>              — full layout report (margins, centering)")
         print()
         print("Examples:")
         print("  python font_tool.py scan \"C:/path/to/font.ttf\"")
@@ -456,6 +507,15 @@ def main():
             print("Usage: python font_tool.py center <header.h>")
             sys.exit(1)
         cmd_center(sys.argv[2])
+
+    elif cmd == "layout":
+        if len(sys.argv) < 4:
+            print("Usage: python font_tool.py layout <ttf> <pt> [--24h]")
+            sys.exit(1)
+        is12h = True
+        if len(sys.argv) >= 5 and sys.argv[4] == "--24h":
+            is12h = False
+        cmd_layout(sys.argv[2], sys.argv[3], is12h)
 
     else:
         print(f"Unknown command: {cmd}")

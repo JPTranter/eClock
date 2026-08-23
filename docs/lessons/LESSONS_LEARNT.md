@@ -656,6 +656,48 @@ All Python tools in `firmware/tools/` require:
 
 Pillow is the only non-stdlib dependency across all tools.
 
+## 17. Display layout: 2px margins and centering (verified 2026-08-23)
+
+The ePaper display (296×128) has no drawn border — the physical panel frame
+provides the edge. Setting `fillScreen(GxEPD_WHITE)` clears the entire panel.
+Content should maintain **2px margins** from each edge to prevent rendering
+artifacts near the glass edge.
+
+### Layout constants
+
+```
+ 0       2                          panel edge
+ |       |                          ── 2px margin
+ | Date text (x=2, baseline=12)     │ Bolt/battery icon (right-2, y=2)
+ |                                   │
+ |                                   │  Time zone: 98px
+ |     Clock time (centre at 118)    │
+ |                                   │
+ | Icon (2px left)  Sync time  AM   │  Baseline at h-2-5 ≈ 121
+ 2                                    ── 2px margin
+128                                panel edge
+```
+
+### Time centering formula
+
+```
+Available space = 114 - 16 = 98 px
+Centre = 16 + 49 = 65
+yOff = -(glyph_bottom),  ink_h = glyph_height
+ink_mid = yOff + ink_h / 2
+baseline = 65 - ink_mid
+```
+
+Example (Chango 82pt): yOff=-84, ink_h=62 → ink_mid=-53 → baseline=118
+
+### Layout commands in font_tool.py
+
+```
+python font_tool.py layout "Chango-Regular.ttf" 82
+```
+
+Outputs all positioning constants for the firmware `main.cpp`.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2
