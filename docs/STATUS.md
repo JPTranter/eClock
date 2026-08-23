@@ -40,8 +40,9 @@ Phase 5 completely resolved remaining UI and hardware integration quirks:
 
 ## Immediate next steps
 
-1. Begin Phase 6 (Enclosure & Final Deployment) to finalize mechanical integration.
-2. Characterise true power consumption in sleep vs advertising.
+1. **Investigate Button 3 (D9):** While the interrupt storm was fixed by re-applying the pull-up, the button still fails to trigger a refresh. The Mbed SPI peripheral might be completely blocking the GPIO input path for MISO. Needs a deeper hardware-level workaround next session.
+2. Begin Phase 6 (Enclosure & Final Deployment) to finalize mechanical integration.
+3. Characterise true power consumption in sleep vs advertising.
 
 ## Open questions
 
