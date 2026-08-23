@@ -191,7 +191,7 @@ static void drawClockFace() {
                 } else if (g_last_sync_failed) {
                     snprintf(syncBuf, sizeof(syncBuf), "Sync failed");
                 } else {
-                    snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u via HA", g_last_sync_hour, g_last_sync_minute);
+                    snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u", g_last_sync_hour, g_last_sync_minute);
                 }
                 
                 display.setFont(&FreeSans9pt7b);
@@ -318,7 +318,10 @@ void loop() {
     // ---------------------------------------------------------------
     // 2. Button press: manual re-sync on demand
     // ---------------------------------------------------------------
-    if (anyButtonPressed() && (now - g_last_button_press > BUTTON_DEBOUNCE_MS)) {
+    static bool button_was_pressed = false;
+    bool button_is_pressed = anyButtonPressed();
+    
+    if (button_is_pressed && !button_was_pressed && (now - g_last_button_press > BUTTON_DEBOUNCE_MS)) {
         g_last_button_press = now;
         Serial.println("Button pressed — starting manual re-sync...");
 
@@ -329,6 +332,7 @@ void loop() {
             startSyncAttempt();
         }
     }
+    button_was_pressed = button_is_pressed;
 
     // ---------------------------------------------------------------
     // 3. State machine transitions
