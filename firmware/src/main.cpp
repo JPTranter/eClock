@@ -1,5 +1,8 @@
 #include <Arduino.h>
 #include <time.h>
+#if defined(ECLOCK_CORE_MBED)
+#include <mbed.h>
+#endif
 
 #if defined(ECLOCK_CORE_MBED)
 #include <ArduinoBLE.h>
@@ -98,31 +101,30 @@ static void startSyncAttempt() {
 // ==== Display helpers ==========================================================
 
 static int getBatteryPercent() {
+    Serial.println("getBatteryPercent: start");
     // Enable battery divider
     pinMode(14, OUTPUT);
     digitalWrite(14, LOW);
     delay(10); // stabilize
     
-    analogReadResolution(12);
-    int raw = analogRead(32); // PIN_VBAT is P0.31 (32)
+    Serial.println("getBatteryPercent: configuring ADC");
+    // analogRead(32) crashes in Seeed's mbed core due to an out-of-bounds array access.
+    // Instead, we directly instantiate an mbed AnalogIn on P0_31.
+    int raw = 0;
+    {
+        mbed::AnalogIn vbat_adc(P0_31);
+        raw = vbat_adc.read_u16() >> 4; // 16-bit down to 12-bit
+    }
     
+    Serial.println("getBatteryPercent: read complete, disabling divider");
     // Disable divider
     digitalWrite(14, HIGH);
     
-    // Reclaim P0.31 from the SAADC peripheral so EPD_DC can use it again
-    for (int ch = 0; ch < 8; ch++) {
-        NRF_SAADC->CH[ch].PSELP = 0xFFFFFFFFUL;
-        NRF_SAADC->CH[ch].PSELN = 0xFFFFFFFFUL;
-    }
-    
-    NRF_GPIO->PIN_CNF[31] =
-        (GPIO_PIN_CNF_DIR_Output   << GPIO_PIN_CNF_DIR_Pos)   |
-        (GPIO_PIN_CNF_INPUT_Connect << GPIO_PIN_CNF_INPUT_Pos) |
-        (GPIO_PIN_CNF_PULL_Disabled << GPIO_PIN_CNF_PULL_Pos)  |
-        (GPIO_PIN_CNF_DRIVE_S0S1   << GPIO_PIN_CNF_DRIVE_Pos) |
-        (GPIO_PIN_CNF_SENSE_Disabled << GPIO_PIN_CNF_SENSE_Pos);
-        
-    NRF_GPIO->OUTCLR = (1UL << 31);
+    Serial.println("getBatteryPercent: recreating pinMode");
+    // Let the mbed core properly destroy the AnalogIn object and recreate the DigitalOut
+    // object so GxEPD2's digitalWrite(32) works again. This avoids crashing the mbed OS
+    // by manually clobbering the SAADC hardware registers beneath it!
+    pinMode(32, OUTPUT);
     
     // Calculate battery percentage (assuming 12-bit, Vref=3.6V, 1/2 divider)
     float vbat = (raw * 7.2f) / 4096.0f;
@@ -132,13 +134,19 @@ static int getBatteryPercent() {
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
     
+    Serial.print("getBatteryPercent: done, pct=");
+    Serial.println(pct);
     return pct;
 }
 
 static void drawClockFace() {
+    Serial.println("drawClockFace: start");
     display.setPartialWindow(0, 0, display.width(), display.height());
+    Serial.println("drawClockFace: setPartialWindow done, calling firstPage()");
     display.firstPage();
+    Serial.println("drawClockFace: firstPage() done");
     do {
+        Serial.println("drawClockFace: loop start");
         display.fillScreen(GxEPD_WHITE);
         display.setTextColor(GxEPD_BLACK);
 
@@ -343,6 +351,7 @@ void loop() {
             g_state = STATE_RUNNING;
             g_last_sync_millis = now;
             updateTimeStruct();
+            g_last_tick_millis = now; // Prevent immediate +1 second jump
             g_last_sync_hour = g_hour;
             g_last_sync_minute = g_minute;
             g_last_sync_failed = false;
@@ -459,9 +468,11 @@ void loop() {
         // Don't sleep longer than 100ms so buttons remain responsive
         sleep_time = min(time_to_tick, (uint32_t)100);
     } else {
-        // While syncing, DO NOT sleep! mbed's BLE stack needs max responsiveness 
-        // to establish connections without BlueZ timing out.
+        // While syncing, DO NOT sleep deeply (WFE) as it causes BlueZ to drop
+        // the connection. Instead, just yield to the mbed RTOS so Bluetooth
+        // background threads aren't starved.
         sleep_time = 0;
+        yield();
     }
 
     if (sleep_time > 0) {
