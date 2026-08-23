@@ -181,10 +181,7 @@ static void drawClockFace() {
                 display.setCursor((display.width() - mw) / 2 - mx,
                                   (display.height() + mh) / 2 - 8);
                 display.print(msg);
-
-                display.setFont(&FreeSans9pt7b);
-                display.setCursor(4, display.height() - 5);
-                display.print(F("Waiting for Home Assistant..."));
+                
                 break;
             }
 
