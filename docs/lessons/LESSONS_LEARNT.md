@@ -247,3 +247,11 @@ ow after the blocking call.
 Home Assistant's sync_discovered_service_info relies on a local cache of discovered BLE devices. If the scanner misses the scan response packet, or if the device name changes, HA may cache the device with 
 ame=None or an incomplete profile. Because of this, relying on exact name matching (service_info.name == DEVICE_NAME) for manual triggers can be extremely flaky. 
 **Solution:** The most reliable way to force a connection to a specific BLE device is to bypass discovery entirely by passing the MAC address directly into sync_ble_device_from_address().
+
+### Button Edge Detection and Debouncing
+When reading raw GPIO pins in the main loop() (e.g. digitalRead(BUTTON_1) == LOW), a simple now - last_press > 300 debounce is insufficient for non-blocking architectures. Because the loop() executes in milliseconds, holding the physical button down for longer than the debounce interval will cause the condition to evaluate to true continuously, hammering the action (e.g., manual sync) multiple times per second.
+**Solution:** Implement explicit edge detection by storing the previous loop's button state and requiring !button_was_pressed && button_is_pressed to trigger the action, forcing the user to physically release the button before another press can register.
+
+### GxEPD2 getTextBounds Jitter
+Adafruit GFX's getTextBounds() calculates the exact pixel bounding box of the *specific string* passed to it. When used to dynamically vertically center a clock (e.g., (display.height() - th) / 2 - ty), the text will visually "jitter" up and down as the time changes, because digits lack descenders but exist in a font box that has them, and certain numbers trigger different bounding dimensions. 
+**Solution:** Do not dynamically center text using getTextBounds() for strings that update frequently (like clocks). Calculate the static mathematical center once based on the font's maximum boundaries (using the fixed yOffset of the font) and hardcode the baseline y coordinate.
