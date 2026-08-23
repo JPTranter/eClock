@@ -50,7 +50,7 @@ static uint8_t g_second = 0;
 // Sync timing
 static uint32_t g_last_sync_millis = 0;          // millis() when time was last written
 static uint32_t g_sync_attempt_start = 0;        // millis() when current attempt began
-static const uint32_t SYNC_INTERVAL = 10 * 60 * 1000UL;   // 10 minutes between re-syncs
+static const uint32_t SYNC_INTERVAL = 60 * 60 * 1000UL;   // 1 hour between re-syncs
 static const uint32_t SYNC_TIMEOUT  = 60 * 1000UL;         // 60 seconds max per attempt
 
 static uint8_t g_last_sync_hour = 0;
@@ -95,19 +95,16 @@ static void startSyncAttempt() {
     BLE.setAdvertisedService(timeService);
     BLE.advertise();
     g_sync_attempt_start = millis();
-    Serial.println("Sync attempt started (advertising)...");
 }
 
 // ==== Display helpers ==========================================================
 
 static int getBatteryPercent() {
-    Serial.println("getBatteryPercent: start");
     // Enable battery divider
     pinMode(14, OUTPUT);
     digitalWrite(14, LOW);
     delay(10); // stabilize
     
-    Serial.println("getBatteryPercent: configuring ADC");
     // analogRead(32) crashes in Seeed's mbed core due to an out-of-bounds array access.
     // Instead, we directly instantiate an mbed AnalogIn on P0_31.
     int raw = 0;
@@ -116,11 +113,9 @@ static int getBatteryPercent() {
         raw = vbat_adc.read_u16() >> 4; // 16-bit down to 12-bit
     }
     
-    Serial.println("getBatteryPercent: read complete, disabling divider");
     // Disable divider
     digitalWrite(14, HIGH);
     
-    Serial.println("getBatteryPercent: recreating pinMode");
     // Let the mbed core properly destroy the AnalogIn object and recreate the DigitalOut
     // object so GxEPD2's digitalWrite(32) works again. This avoids crashing the mbed OS
     // by manually clobbering the SAADC hardware registers beneath it!
@@ -134,19 +129,13 @@ static int getBatteryPercent() {
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
     
-    Serial.print("getBatteryPercent: done, pct=");
-    Serial.println(pct);
     return pct;
 }
 
 static void drawClockFace() {
-    Serial.println("drawClockFace: start");
     display.setPartialWindow(0, 0, display.width(), display.height());
-    Serial.println("drawClockFace: setPartialWindow done, calling firstPage()");
     display.firstPage();
-    Serial.println("drawClockFace: firstPage() done");
     do {
-        Serial.println("drawClockFace: loop start");
         display.fillScreen(GxEPD_WHITE);
         display.setTextColor(GxEPD_BLACK);
 
@@ -268,7 +257,6 @@ void setup() {
     digitalWrite(LED_BLUE, HIGH);
 
     initButtons();
-    Serial.begin(115200);
 
     // Power the ePaper panel
     pinMode(EPD_POWER, OUTPUT);
@@ -288,7 +276,6 @@ void setup() {
     drawClockFace();
 
     if (!BLE.begin()) {
-        Serial.println("FAIL: BLE.begin() failed!");
         while (1) {
             digitalWrite(LED_RED, LOW);
             delay(100);
@@ -309,7 +296,6 @@ void setup() {
     // Begin first sync attempt — the state is already STATE_SYNCING
     startSyncAttempt();
 
-    Serial.println("Boot complete. Advertising for time sync...");
     g_last_tick_millis = millis();
 }
 
@@ -317,24 +303,6 @@ void setup() {
 void loop() {
     BLE.poll();
     uint32_t now = millis();
-    static uint32_t last_print = 0;
-    if (now - last_print > 5000) {
-        last_print = now;
-        Serial.print("Liveness: state=");
-        Serial.println(g_state);
-    }
-    if (Serial.available()) {
-        char c = Serial.read();
-        if (c == 'b') {
-            Serial.println("Simulating button press via serial...");
-            if (g_state != STATE_SYNCING && g_state != STATE_RESYNCING) {
-                ClockState old_state = g_state;
-                g_state = STATE_RESYNCING;
-                g_needs_display_update = (old_state == STATE_NO_TIME);
-                startSyncAttempt();
-            }
-        }
-    }
     // ---------------------------------------------------------------
     // 1. BLE characteristic write: Home Assistant sent us the time
     // ---------------------------------------------------------------
@@ -343,9 +311,6 @@ void loop() {
             const uint8_t* val = timeCharacteristic.value();
             memcpy(&g_epoch, val, 4);
             memcpy(&g_tz_offset, val + 4, 4);
-
-            Serial.print("Received time sync! Epoch: ");
-            Serial.println(g_epoch);
 
             // Update state regardless of what it was
             g_state = STATE_RUNNING;
@@ -359,7 +324,6 @@ void loop() {
 
             // Shut down radio to save power now that we have the time
             BLE.stopAdvertise();
-            Serial.println("Time synced, radio off.");
 
             // Flash green LED briefly as feedback
             digitalWrite(LED_GREEN, LOW);
@@ -376,7 +340,6 @@ void loop() {
     
     if (button_is_pressed && !button_was_pressed && (now - g_last_button_press > BUTTON_DEBOUNCE_MS)) {
         g_last_button_press = now;
-        Serial.println("Button pressed — starting manual re-sync...");
 
         // Only trigger if we aren't already in the middle of a sync attempt
         if (g_state != STATE_SYNCING && g_state != STATE_RESYNCING) {
@@ -396,20 +359,17 @@ void loop() {
         case STATE_RESYNCING: {
             // Timed out waiting for a sync?
             if (millis() - g_sync_attempt_start >= SYNC_TIMEOUT) {
-                Serial.println("Sync attempt timed out.");
                 BLE.stopAdvertise();
 
                 if (g_epoch == 0) {
                     // We never had a valid time — go to error screen
                     g_state = STATE_NO_TIME;
                     g_needs_display_update = true;
-                    Serial.println("Sync failed — no time available.");
                 } else {
                     // Re-sync failed — carry on with the drifting clock
                     g_state = STATE_RUNNING;
                     g_last_sync_failed = true;
                     g_needs_display_update = true;
-                    Serial.println("Re-sync timed out, continuing with existing time.");
                 }
             }
             break;
@@ -418,7 +378,6 @@ void loop() {
         case STATE_RUNNING: {
             // Time for a periodic re-sync?
             if (now - g_last_sync_millis >= SYNC_INTERVAL) {
-                Serial.println("10-minute re-sync interval reached.");
                 g_state = STATE_RESYNCING;
                 g_needs_display_update = true;
                 startSyncAttempt();
