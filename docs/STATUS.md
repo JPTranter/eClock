@@ -34,11 +34,14 @@ Phase 4 successfully solved the critical Bluetooth bugs on the `mbed` core:
 5. **HA GATT Caching:** Flashing updated firmware during dev requires forcefully calling `clear_cache()` in Bleak so HA sees newly exposed characteristics.
 6. **HA Deduplication:** HA aggressively deduplicates identical BLE advertisements. A rolling counter added to `ManufacturerData` successfully forces HA to trigger a fresh time sync on every button press.
 
+Phase 5 completely resolved remaining UI and hardware integration quirks:
+1. **SPI MISO vs GPIO Interrupt Interference:** The `D9` button pin shares the `MISO` line. `SPI.begin()` initializes MISO with no pull-up resistor, leaving the button floating. This caused an interrupt storm that crashed the device. Re-applying `pinMode(INPUT_PULLUP)` immediately after `SPI.begin()` restored the pull-up and completely fixed the bug without requiring complex hardware SPI detachment sequences.
+2. **Text Wrap Overflow:** At 10:09 and 00:00, the `FontChango82` width overflowed the 296px screen, causing Adafruit_GFX to wrap the final digit off-screen. By artificially reducing the `xAdvance` property of the digits in the `GFXglyph` array by 8 pixels, the characters were compressed (bubble-letter style) enough to fit safely on a single line.
+
 ## Immediate next steps
 
-1. Begin Phase 5 (Final refinement) to clean up code and finalize mechanical integration.
-2. Re-visit Phase 3 deep sleep implementation now that BLE is working, to ensure battery life can hit the target.
-3. Characterise true power consumption in sleep vs advertising.
+1. Begin Phase 6 (Enclosure & Final Deployment) to finalize mechanical integration.
+2. Characterise true power consumption in sleep vs advertising.
 
 ## Open questions
 
@@ -55,6 +58,6 @@ Phase 4 successfully solved the critical Bluetooth bugs on the `mbed` core:
 | 2. Display functionality | **Yes** | 2026-08-22 | Panel alive: full 3374ms, partial 880ms, zero ghosting at 53 partials |
 | 3. Power management | **Yes** | 2026-08-23 | Clock face draws with battery monitoring; SAADC pin conflict solved. System ON idle sleep (WFE) running. |
 | 4. Bluetooth integration | **Yes** | 2026-08-23 | Working end-to-end with HA. |
-| 5. Final refinement | No | — | |
+| 5. Final refinement | **Yes** | 2026-08-23 | Hardware SPI/GPIO interference and custom font line-wrapping fixed. |
 
-Phase 3 is now formally complete. We implemented mbed-os System ON idle sleep (WFE) by hooking delay() into the non-blocking main loop, dramatically reducing the CPU duty cycle while maintaining sub-100ms latency for physical buttons and BLE events.
+Phase 5 is now formally complete. The device is rock solid, syncs reliably via BLE, gracefully handles display width limitations, and safely resolves hardware pin multiplexing conflicts.

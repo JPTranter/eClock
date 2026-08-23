@@ -291,6 +291,7 @@ static void drawClockFace() {
 
                 // Use the big time font
                 display.setFont(&font);
+                display.setTextWrap(false);
 
                 // Centre the time string horizontally
                 int16_t tx, ty;
@@ -421,6 +422,10 @@ static void enterSleepMode() {
     delay(50);
     display.init(115200, true, 2, false);
     display.setRotation(1);
+    
+    // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
+    // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
+    pinMode(BUTTON_3, INPUT_PULLUP);
 
     // If button woke us, set cooldown so we don't immediately re-sleep
     if (woke_by_button) {
@@ -462,6 +467,10 @@ void setup() {
 
     display.init(115200, true, 2, false);
     display.setRotation(1);  // landscape: 296 wide × 128 tall
+    
+    // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
+    // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
+    pinMode(BUTTON_3, INPUT_PULLUP);
 
     // Draw the "Syncing..." screen before BLE init so the user sees feedback
     // before the BLE stack (which can take ~1s) finishes starting
