@@ -459,8 +459,9 @@ void loop() {
         // Don't sleep longer than 100ms so buttons remain responsive
         sleep_time = min(time_to_tick, (uint32_t)100);
     } else {
-        // While syncing, poll BLE frequently (50ms)
-        sleep_time = 50;
+        // While syncing, DO NOT sleep! mbed's BLE stack needs max responsiveness 
+        // to establish connections without BlueZ timing out.
+        sleep_time = 0;
     }
 
     if (sleep_time > 0) {
