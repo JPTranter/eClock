@@ -226,32 +226,122 @@ uses Dxx symbols with the Plus variant selected, which defines them as `static c
 
 ---
 
+## 8. Battery monitoring: mbed::AnalogIn vs analogRead (verified 2026-08-23)
+
+On the mbed core, `analogRead(PIN_VBAT)` crashes with an out-of-bounds array access in `Seeed_ADC` because the pin index (32) exceeds the ADC channel table size. The fix is to bypass Arduino's ADC wrapper and instantiate a direct `mbed::AnalogIn`:
+
+```cpp
+mbed::AnalogIn vbat_adc(P0_31);
+int raw = vbat_adc.read_u16() >> 4;  // 16-bit → 12-bit
+```
+
+The `mbed::AnalogIn` object goes out of scope after the read, then `pinMode(32, OUTPUT)` recreates the pin as a GPIO — letting the mbed core properly manage the SAADC peripheral lifecycle instead of manually clobbering registers. This replaced the earlier raw-SAADC-register-dance approach from section 2 when building for the mbed core.
+
+## 9. Power saving: remove Serial entirely and sleep longer (verified 2026-08-23)
+
+### Removing Serial saves UART power
+
+`Serial.begin(115200)` activates the UART peripheral which draws ~1 mA even when idle. Since this is a standalone clock with no host connection during normal operation, removing every `Serial.print()` call and the `Serial.begin()` itself saves meaningful current. All debug info (liveness heartbeats, sync events, battery readings) is eliminated.
+
+### The BLE advertising duty cycle dominates battery life
+
+A BLE advertising session draws ~12 mA. With a 60-second timeout every 10 minutes, the radio is active 10% of the time — averaging 1.2 mA. Changing the re-sync interval from 10 minutes to 1 hour drops this to 1.7% duty cycle (~200 µA average), the single biggest power improvement.
+
+**Estimated runtime with both changes:**
+
+| Battery | 10-min BLE + Serial | 1-hour BLE + no Serial |
+|---------|--------------------|------------------------|
+| 500 mAh | ~11 days | ~25 days |
+| 1000 mAh | ~23 days | ~50 days |
+| 2000 mAh | ~45 days | ~99 days |
+
+## 10. Interrupt-driven buttons with mbed rtos::Semaphore (verified 2026-08-23)
+
+### The polling problem
+
+The original code called `digitalRead()` on three button pins every 100 ms just to detect presses. The CPU did nothing useful during those wake-ups — it polled, found nothing, and went back to sleep. For every 200 µs of active work, the CPU drew ~10 mA, repeated 10 times per second.
+
+### GPIOTE interrupts + semaphore wake
+
+The nRF52840's GPIOTE peripheral generates an interrupt on any configured edge (here, FALLING). The ISR performs hardware-level debouncing (millis() timestamp check) and releases a mbed `rtos::Semaphore`:
+
+```cpp
+static void button_isr() {
+    static uint32_t last_isr_ms = 0;
+    uint32_t now = millis();
+    if (now - last_isr_ms > BUTTON_DEBOUNCE_MS) {
+        last_isr_ms = now;
+        g_button_pending = true;
+        g_button_sem.release();    // wakes blocked try_acquire_for()
+    }
+}
+```
+
+The main loop now sleeps by blocking on `g_button_sem.try_acquire_for(chrono::milliseconds(duration))`. Inside mbed's RTOS, this puts the thread to sleep; the idle thread executes WFE (Wait For Event), which is System ON sleep at ~3 µA. When a button is pressed, GPIOTE fires → ISR → semaphore release → scheduler wakes the main thread → try_acquire_for returns instantly.
+
+### Decoupling wake from detection: the volatile flag
+
+There's a subtle problem: `try_acquire_for()` **consumes** the semaphore's count on return. If a button press fired the semaphore *only* to wake the CPU (and the semaphore was consumed by the blocking call), `anyButtonPressed()` would see count=0 and miss the press entirely.
+
+The fix is a separate `volatile bool g_button_pending` flag:
+
+```cpp
+// ISR sets both:
+g_button_pending = true;   // persists for detection
+g_button_sem.release();    // wakes blocked try_acquire_for()
+
+// Detection reads and clears the flag:
+bool anyButtonPressed() {
+    bool pressed = g_button_pending;
+    g_button_pending = false;
+    if (pressed) g_button_sem.try_acquire();  // consume leftover semaphore
+    return pressed;
+}
+```
+
+This decouples *wake* (semaphore) from *detection* (volatile flag). No memory barrier needed on single-core Cortex-M4.
+
+### Push the sleep from 100 ms to 60 seconds
+
+With interrupts handling buttons, the CPU no longer needs to poll. The power management block now sleeps up to the **full remaining time** until the next 1-minute tick boundary (up to 60,000 ms). A button press wakes the CPU from WFE in microseconds regardless of sleep depth.
+
+## 11. Minute-boundary time alignment (verified 2026-08-23)
+
+### The problem with 1-second ticks
+
+Previously the clock advanced `g_epoch` by 1 every second, then updated the display only when `g_second == 0`. This meant the CPU woke 60 times per minute but only did useful work once. The remaining 59 wake-ups were pure overhead.
+
+### Advancing by 60 seconds once per minute
+
+Change `TICK_INTERVAL` from 1000 to 60000 and advance `g_epoch` by 60 on each tick:
+
+```cpp
+if (elapsed >= TICK_INTERVAL) {
+    uint32_t advance = 60;
+    if (g_second > 0) {
+        advance = 60 - g_second;  // first tick after sync: snap to :00
+    }
+    g_epoch += advance;
+    updateTimeStruct();
+    g_last_tick_millis += TICK_INTERVAL;
+}
+```
+
+### Aligning the first tick to :00
+
+When Home Assistant sends the time at, say, `14:32:17`, we compute the subsecond offset and anchor `g_last_tick_millis` to the current minute boundary:
+
+```cpp
+g_last_tick_millis = now - (g_second * 1000);
+```
+
+The first tick fires after `60 - 17 = 43` seconds (the partial interval to `:00`), advancing `g_epoch` by 43. Every subsequent tick fires after exactly 60 seconds, advancing by 60. The display always updates on the minute boundary with no jitter.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2
 - Seeed Plus variant: vendored at `firmware/variants/Seeed_XIAO_nRF52840_Plus`
 - nRF52840 PS reference: SAADC chapter, PSEL registers, GPIO PIN_CNF
+- mbed OS Semaphore: https://os.mbed.com/docs/mbed-os/v6.16/apis/semaphore.html
 - Datasheets: not committed (proprietary); download links in
   `docs/hardware/datasheets/README.md`
-### ArduinoBLE Silent Advertisement Failure
-On the mbed core, if BLE.stopAdvertise() is called, simply calling BLE.advertise() again later will silently fail to broadcast the advertisement packet. To reliably resume advertising, you must explicitly re-apply the GAP parameters (BLE.setLocalName, BLE.setDeviceName, and BLE.setAdvertisedService) immediately before calling BLE.advertise().
-
-### Integer Underflow in Timeout Logic
-When implementing non-blocking timeouts with millis(), ensure the timestamp being subtracted was captured *before or at the same time* as the 
-ow variable. If start = millis() is called after a blocking operation (like BLE.advertise()) but subtracted from an earlier 
-ow snapshot, 
-ow - start will underflow to a massive positive number (e.g. 4.2 billion), instantly triggering the timeout. Always use millis() - start inline or update 
-ow after the blocking call.
-
-### Home Assistant Bluetooth Discovery Quirks
-Home Assistant's sync_discovered_service_info relies on a local cache of discovered BLE devices. If the scanner misses the scan response packet, or if the device name changes, HA may cache the device with 
-ame=None or an incomplete profile. Because of this, relying on exact name matching (service_info.name == DEVICE_NAME) for manual triggers can be extremely flaky. 
-**Solution:** The most reliable way to force a connection to a specific BLE device is to bypass discovery entirely by passing the MAC address directly into sync_ble_device_from_address().
-
-### Button Edge Detection and Debouncing
-When reading raw GPIO pins in the main loop() (e.g. digitalRead(BUTTON_1) == LOW), a simple now - last_press > 300 debounce is insufficient for non-blocking architectures. Because the loop() executes in milliseconds, holding the physical button down for longer than the debounce interval will cause the condition to evaluate to true continuously, hammering the action (e.g., manual sync) multiple times per second.
-**Solution:** Implement explicit edge detection by storing the previous loop's button state and requiring !button_was_pressed && button_is_pressed to trigger the action, forcing the user to physically release the button before another press can register.
-
-### GxEPD2 getTextBounds Jitter
-Adafruit GFX's getTextBounds() calculates the exact pixel bounding box of the *specific string* passed to it. When used to dynamically vertically center a clock (e.g., (display.height() - th) / 2 - ty), the text will visually "jitter" up and down as the time changes, because digits lack descenders but exist in a font box that has them, and certain numbers trigger different bounding dimensions. 
-**Solution:** Do not dynamically center text using getTextBounds() for strings that update frequently (like clocks). Calculate the static mathematical center once based on the font's maximum boundaries (using the fixed yOffset of the font) and hardcode the baseline y coordinate.

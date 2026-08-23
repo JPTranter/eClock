@@ -40,7 +40,7 @@ static ClockState g_state = STATE_SYNCING;
 // ==== Time state ===============================================================
 static int32_t  g_epoch = 0;            // seconds since 1970-01-01
 static int32_t  g_tz_offset = 0;        // UTC offset in seconds
-static uint32_t g_last_tick_millis = 0; // millis() of the most recent 1-second tick
+static uint32_t g_last_tick_millis = 0; // millis() of the most recent time advance
 
 // Time components for display
 static uint8_t g_hour = 0;
@@ -66,8 +66,8 @@ static const uint32_t BUTTON_DEBOUNCE_MS = 300;
 
 // Semaphore for interrupt-driven button wake. The ISR releases this on a
 // falling edge; the power management code blocks on it via try_acquire_for(),
-// so the CPU can sleep for up to a full 1-second tick and still respond
-// instantly to button presses.
+// so the CPU can sleep for up to a full minute and still respond instantly
+// to button presses.
 // A separate volatile flag tracks whether a press occurred even when the
 // semaphore is consumed by the wake mechanism.
 static rtos::Semaphore g_button_sem(0, 1);
@@ -280,6 +280,9 @@ static void drawClockFace() {
     } while (display.nextPage());
 }
 
+// ==== Tick interval (60 seconds) ==============================================
+static const uint32_t TICK_INTERVAL = 60000;  // Advance time once per minute
+
 // ==== Setup ====================================================================
 void setup() {
     pinMode(LED_RED, OUTPUT);
@@ -349,11 +352,17 @@ void loop() {
             g_state = STATE_RUNNING;
             g_last_sync_millis = now;
             updateTimeStruct();
-            g_last_tick_millis = now; // Prevent immediate +1 second jump
+            g_needs_display_update = true;
             g_last_sync_hour = g_hour;
             g_last_sync_minute = g_minute;
             g_last_sync_failed = false;
-            g_needs_display_update = true;
+
+            // Align the tick timer to the current second. We set the baseline
+            // such that the first tick happens at the next minute boundary
+            // (:00 seconds). This ensures the clock snaps to the correct minute
+            // on the very first display update.
+            uint32_t subsecond_ms = g_second * 1000;
+            g_last_tick_millis = now - subsecond_ms;  // "anchor" at :00 of current minute
 
             // Shut down radio to save power now that we have the time
             BLE.stopAdvertise();
@@ -420,15 +429,22 @@ void loop() {
     }
 
     // ---------------------------------------------------------------
-    // 4. Timekeeping: advance the local epoch clock once per second
+    // 4. Timekeeping: advance the epoch by 60 seconds once per minute,
+    //    synced to the strict minute boundary (:00).
     // ---------------------------------------------------------------
-    if (g_state == STATE_RUNNING && (now - g_last_tick_millis >= 1000)) {
-        g_epoch++;
-        updateTimeStruct();
-        g_last_tick_millis = now;
-
-        // Update display every minute when seconds hit 0
-        if (g_second == 0) {
+    if (g_state == STATE_RUNNING) {
+        uint32_t elapsed = now - g_last_tick_millis;
+        if (elapsed >= TICK_INTERVAL) {
+            // After a sync that arrived mid-minute (g_second > 0), the first
+            // advance is partial — we skip ahead to :00.  Every subsequent
+            // advance adds exactly 60 seconds (one full minute).
+            uint32_t advance = 60;
+            if (g_second > 0) {
+                advance = 60 - g_second;
+            }
+            g_epoch += advance;
+            updateTimeStruct();
+            g_last_tick_millis += TICK_INTERVAL;
             g_needs_display_update = true;
         }
     }
@@ -445,11 +461,10 @@ void loop() {
     // 6. Power Management (System ON Sleep)
     // ---------------------------------------------------------------
     if (g_state == STATE_RUNNING) {
-        // Sleep until the next 1-second tick. A GPIOTE interrupt on any
-        // button pin releases the semaphore and wakes the CPU early, so we
-        // never need to poll — the full tick interval is available as sleep.
-        uint32_t elapsed_tick = millis() - g_last_tick_millis;
-        uint32_t time_to_tick = (elapsed_tick >= 1000) ? 0 : (1000 - elapsed_tick);
+        // Sleep until the next minute boundary. A GPIOTE interrupt on any
+        // button pin releases the semaphore and wakes the CPU early.
+        uint32_t elapsed = now - g_last_tick_millis;
+        uint32_t time_to_tick = (elapsed >= TICK_INTERVAL) ? 0 : (TICK_INTERVAL - elapsed);
         if (time_to_tick > 0) {
             g_button_sem.try_acquire_for(std::chrono::milliseconds(time_to_tick));
         }
