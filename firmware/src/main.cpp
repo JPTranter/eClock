@@ -64,19 +64,52 @@ static bool g_needs_display_update = true;  // always draw on first loop
 static uint32_t g_last_button_press = 0;
 static const uint32_t BUTTON_DEBOUNCE_MS = 300;
 
+// Semaphore for interrupt-driven button wake. The ISR releases this on a
+// falling edge; the power management code blocks on it via try_acquire_for(),
+// so the CPU can sleep for up to a full 1-second tick and still respond
+// instantly to button presses.
+// A separate volatile flag tracks whether a press occurred even when the
+// semaphore is consumed by the wake mechanism.
+static rtos::Semaphore g_button_sem(0, 1);
+static volatile bool g_button_pending = false;
+
 // ==== Buttons ==================================================================
 // EN05 has three user buttons on D1, D2, D9: active LOW with INPUT_PULLUP.
+// GPIOTE interrupts on the falling edge wake the CPU from WFE sleep, so we
+// never need to poll digitalRead. The ISR hardware-debounces (ignores bounces
+// within BUTTON_DEBOUNCE_MS of each other).
+
+static void button_isr() {
+    static uint32_t last_isr_ms = 0;
+    uint32_t now = millis();
+    if (now - last_isr_ms > BUTTON_DEBOUNCE_MS) {
+        last_isr_ms = now;
+        g_button_pending = true;   // persist for detection
+        g_button_sem.release();    // wake blocked try_acquire_for()
+    }
+}
+
 static void initButtons() {
     pinMode(BUTTON_1, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_1), button_isr, FALLING);
     pinMode(BUTTON_2, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_2), button_isr, FALLING);
     pinMode(BUTTON_3, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_3), button_isr, FALLING);
 }
 
 static bool anyButtonPressed() {
-    // Active-low: LOW means pressed
-    return digitalRead(BUTTON_1) == LOW
-        || digitalRead(BUTTON_2) == LOW
-        || digitalRead(BUTTON_3) == LOW;
+    // Read and clear the flag. The semaphore is consumed separately
+    // (by try_acquire_for for wake, or by this call for detection),
+    // but the flag persists across semaphore consumption.
+    // No memory barrier needed on single-core Cortex-M4.
+    bool pressed = g_button_pending;
+    g_button_pending = false;
+    if (pressed) {
+        // Consume the semaphore if it wasn't already consumed by a wake.
+        g_button_sem.try_acquire();
+    }
+    return pressed;
 }
 
 // ==== Time helpers =============================================================
@@ -335,10 +368,7 @@ void loop() {
     // ---------------------------------------------------------------
     // 2. Button press: manual re-sync on demand
     // ---------------------------------------------------------------
-    static bool button_was_pressed = false;
-    bool button_is_pressed = anyButtonPressed();
-    
-    if (button_is_pressed && !button_was_pressed && (now - g_last_button_press > BUTTON_DEBOUNCE_MS)) {
+    if (anyButtonPressed() && (now - g_last_button_press > BUTTON_DEBOUNCE_MS)) {
         g_last_button_press = now;
 
         // Only trigger if we aren't already in the middle of a sync attempt
@@ -348,7 +378,6 @@ void loop() {
             startSyncAttempt();
         }
     }
-    button_was_pressed = button_is_pressed;
 
     // ---------------------------------------------------------------
     // 3. State machine transitions
@@ -415,26 +444,18 @@ void loop() {
     // ---------------------------------------------------------------
     // 6. Power Management (System ON Sleep)
     // ---------------------------------------------------------------
-    // Calculate maximum time we can safely sleep while waiting for the next event.
-    // mbed's delay() automatically yields to the RTOS, placing the CPU in low-power WFE.
-    uint32_t sleep_time = 100; // Default fast polling for button latency
-
     if (g_state == STATE_RUNNING) {
-        // We can sleep until the next 1-second tick
+        // Sleep until the next 1-second tick. A GPIOTE interrupt on any
+        // button pin releases the semaphore and wakes the CPU early, so we
+        // never need to poll — the full tick interval is available as sleep.
         uint32_t elapsed_tick = millis() - g_last_tick_millis;
         uint32_t time_to_tick = (elapsed_tick >= 1000) ? 0 : (1000 - elapsed_tick);
-        
-        // Don't sleep longer than 100ms so buttons remain responsive
-        sleep_time = min(time_to_tick, (uint32_t)100);
+        if (time_to_tick > 0) {
+            g_button_sem.try_acquire_for(std::chrono::milliseconds(time_to_tick));
+        }
     } else {
-        // While syncing, DO NOT sleep deeply (WFE) as it causes BlueZ to drop
-        // the connection. Instead, just yield to the mbed RTOS so Bluetooth
-        // background threads aren't starved.
-        sleep_time = 0;
+        // While syncing, avoid WFE sleep as it causes BlueZ to drop the
+        // connection. Yield to the mbed RTOS so the BLE stack isn't starved.
         yield();
-    }
-
-    if (sleep_time > 0) {
-        delay(sleep_time);
     }
 }
