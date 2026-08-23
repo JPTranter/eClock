@@ -247,13 +247,17 @@ The `mbed::AnalogIn` object goes out of scope after the read, then `pinMode(32, 
 
 A BLE advertising session draws ~12 mA. With a 60-second timeout every 10 minutes, the radio is active 10% of the time — averaging 1.2 mA. Changing the re-sync interval from 10 minutes to 1 hour drops this to 1.7% duty cycle (~200 µA average), the single biggest power improvement.
 
-**Estimated runtime with both changes:**
+**Further reduction:** shortening `SYNC_TIMEOUT` from 60 to 30 seconds (verified 2026-08-23) halves the advertising window to 30s per hour, giving 0.83% duty cycle (~100 µA average). This costs nothing in reliability — Home Assistant typically responds within 1–3 seconds.
 
-| Battery | 10-min BLE + Serial | 1-hour BLE + no Serial |
-|---------|--------------------|------------------------|
-| 500 mAh | ~11 days | ~25 days |
-| 1000 mAh | ~23 days | ~50 days |
-| 2000 mAh | ~45 days | ~99 days |
+**Estimated runtime with all changes:**
+
+| Battery | 1-min refresh + 1h/60s BLE | 1-min refresh + 1h/30s BLE |
+|---------|---------------------------|---------------------------|
+| 500 mAh | ~25 days | ~28 days |
+| 1000 mAh | ~50 days | ~55 days |
+| 2000 mAh | ~99 days | ~111 days |
+
+*Note: reaching 3 months (~90 days) on a 500 mAh cell would also require reducing the display refresh from 1-minute to ~10-minute intervals (~63 µA avg), dropping total average current to ~173 µA.*
 
 ## 10. Interrupt-driven buttons with mbed rtos::Semaphore (verified 2026-08-23)
 

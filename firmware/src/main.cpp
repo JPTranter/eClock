@@ -51,7 +51,7 @@ static uint8_t g_second = 0;
 static uint32_t g_last_sync_millis = 0;          // millis() when time was last written
 static uint32_t g_sync_attempt_start = 0;        // millis() when current attempt began
 static const uint32_t SYNC_INTERVAL = 60 * 60 * 1000UL;   // 1 hour between re-syncs
-static const uint32_t SYNC_TIMEOUT  = 60 * 1000UL;         // 60 seconds max per attempt
+static const uint32_t SYNC_TIMEOUT  = 30 * 1000UL;         // 30 seconds max per attempt
 
 static uint8_t g_last_sync_hour = 0;
 static uint8_t g_last_sync_minute = 0;
