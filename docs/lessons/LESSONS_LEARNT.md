@@ -361,6 +361,9 @@ Each glyph in the GFXglyph table has a `yOffset` field (6th column). This is a s
 
 The `FontHuge7b.h` comment had hardcoded centering math for the Arial Bold 105pt font. After swapping fonts, the `setCursor` y-coordinate must be recalculated from the new font's glyph metrics: typical g.yOffset ≈ -99, typical glyph height ≈ 67, so the ink midpoint is at -99 + 33.5 = -65.5, and the baseline for vertical centering between the date line (bottom at ~22) and status line (top at ~110) is 66 - (-65.5) ≈ 132.
 
+> **Full step-by-step reference with sizing scan script and centering
+> calculator:** `docs/reference/FONT_GENERATION.md`
+
 ## 13. USB power detection via VBUS register (verified 2026-08-23)
 
 The nRF52840's `POWER` peripheral includes a `USBREGSTATUS` register with a `VBUSDETECT` bit that is set when VBUS voltage is above the valid threshold. This does not require initialising the USB stack — it is a purely hardware level detection available at any time:
