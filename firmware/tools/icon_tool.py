@@ -19,6 +19,11 @@ Usage:
     python icon_tool.py batch "C:/path/to/icons.ttf" 14 \
         --icons "check=0xE86C,error=0xE000,refresh=0xE5D5" --no-trim
 
+    # Render a sprite sheet of multiple icons for visual review
+    python icon_tool.py sprite "C:/path/to/icons.ttf" 17 0xE86C 0xE000 0xE5D5
+    python icon_tool.py sprite "C:/path/to/icons.ttf" 17 \
+        --icons "synced=0xE86C,failed=0xE000" --output preview.png
+
 The tool automatically:
 - Renders the glyph at the requested size
 - Trims empty rows/columns by default (use --no-trim to preserve raw size)
@@ -29,6 +34,7 @@ Depends on Pillow: pip install Pillow
 
 import sys
 import os
+import textwrap
 
 try:
     from PIL import ImageFont, Image, ImageDraw
@@ -163,6 +169,73 @@ def format_c_array(name, bytes_data, w, h):
     return '\n'.join(lines)
 
 
+def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
+    """Render icons as a sprite sheet PNG for visual review."""
+    font = ImageFont.truetype(ttf_path, pt_size)
+    
+    if not output_path:
+        # Default to project root (firmware/tools/ → firmware/ → project_root)
+        script_dir = os.path.dirname(os.path.abspath(__file__))    # firmware/tools/
+        project_root = os.path.dirname(os.path.dirname(script_dir))  # project root
+        font_name = os.path.splitext(os.path.basename(ttf_path))[0]
+        output_path = os.path.join(project_root, f'sprite_{font_name}_{pt_size}pt.png')
+    
+    # Render each icon to get dimensions
+    rendered = []
+    max_label_w = 0
+    for name, cp in icons_dict.items():
+        bbox = font.getbbox(chr(cp))
+        if not bbox or bbox[2] == 0:
+            print(f"WARNING: '{name}' has no glyph at U+{cp:04X}")
+            continue
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        label = f'U+{cp:04X}  {name}  [{w}x{h}]'
+        rendered.append((name, cp, w, h, label))
+        max_label_w = max(max_label_w, len(label))
+    
+    if not rendered:
+        print("ERROR: no icons rendered")
+        sys.exit(1)
+    
+    cell_h = 24
+    label_w = max_label_w * 7 + 20
+    icon_area_w = 60
+    cell_w = label_w + icon_area_w
+    sheet_h = cell_h * len(rendered)
+    
+    sheet = Image.new('RGB', (cell_w, sheet_h), (255, 255, 255))
+    draw = ImageDraw.Draw(sheet)
+    
+    for i, (name, cp, w, h, label) in enumerate(rendered):
+        y = i * cell_h
+        # Render icon (black on white = ePaper colour scheme)
+        icon_img = Image.new('1', (w, h), 1)  # white bg
+        idd = ImageDraw.Draw(icon_img)
+        idd.text((-font.getbbox(chr(cp))[0], -font.getbbox(chr(cp))[1]),
+                 chr(cp), font=font, fill=0)  # black fg
+        # Convert to 'L' and invert so ink=255 (opaque), bg=0 (transparent)
+        mask = Image.eval(icon_img.convert('L'), lambda x: 255 - x)
+        icon_rgb = Image.new('RGB', (w, h), (255, 255, 255))  # white bg
+        icon_rgb.paste((0, 0, 0), mask=mask)  # black fg
+        sheet.paste(icon_rgb, (4, y + (cell_h - h) // 2))
+        
+        # Black border around the icon cell
+        border_x = 2
+        border_y = y + (cell_h - h) // 2 - 1
+        border_w = w + 3
+        border_h = h + 2
+        draw.rectangle([border_x, border_y, border_x + border_w, border_y + border_h],
+                       outline=(0, 0, 0))
+        
+        draw.text((w + 12, y + 3), label, fill=0)
+    
+    sheet.save(output_path)
+    print(f"Sprite sheet saved: {output_path}")
+    print(f"  Icons: {len(rendered)}")
+    print(f"  Size: {cell_w}x{sheet_h}px")
+
+
 def cmd_export(ttf_path, pt_size, codepoint_hex):
     """Export a single glyph and print the C array."""
     if not os.path.exists(ttf_path):
@@ -285,6 +358,37 @@ def main():
             sys.exit(1)
 
         cmd_batch(ttf, pt, icons_str, header_path, guard, no_trim)
+
+    elif cmd == "sprite":
+        if len(sys.argv) < 5:
+            print("Usage: python icon_tool.py sprite <ttf_path> <pt_size> <cp1> [cp2 ...] [--icons ...] [--output path]")
+            sys.exit(1)
+        ttf = sys.argv[2]
+        pt = int(sys.argv[3])
+        cps = []
+        icons_dict = {}
+        output_path = None
+        i = 4
+        while i < len(sys.argv):
+            if sys.argv[i] == "--icons" and i + 1 < len(sys.argv):
+                # Parse name=cp pairs
+                for pair in sys.argv[i + 1].split(','):
+                    n, c = pair.split('=')
+                    icons_dict[n.strip()] = int(c.strip(), 16)
+                i += 2
+            elif sys.argv[i] == "--output" and i + 1 < len(sys.argv):
+                output_path = sys.argv[i + 1]
+                i += 2
+            elif sys.argv[i].startswith('0x'):
+                cps.append(int(sys.argv[i], 16))
+                i += 1
+            else:
+                i += 1
+        # If no named icons, use codepoints directly
+        if not icons_dict:
+            for cp in cps:
+                icons_dict[f'U+{cp:04X}'] = cp
+        cmd_sprite(ttf, pt, icons_dict, output_path)
 
     else:
         print(f"Unknown command: {cmd}")

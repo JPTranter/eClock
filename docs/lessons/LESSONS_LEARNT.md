@@ -594,6 +594,68 @@ python icon_tool.py batch "MaterialIcons-Regular.ttf" 17 \
 This ensures all icons use the same coordinate space, making pixel
 positions consistent in `drawBitmap()` calls.
 
+### Material Symbols Outlined — newer icon font
+
+The original `MaterialIcons-Regular.ttf` (Google Material Icons, ~350 KB)
+was replaced with `MaterialSymbolsOutlined.ttf` (Material Symbols Outlined,
+~10 MB variable font from GitHub) because the new set includes horizontally
+oriented icons that are more suitable for the clock's status line:
+
+| Purpose | Old icon (Material Icons) | New icon (Material Symbols Outlined) |
+|---------|--------------------------|--------------------------------------|
+| USB / charging | `bolt` — vertical zigzag (U+E8B0, 17×16) | `battery_android_bolt` — horizontal battery + bolt inside (U+F305, 20×16) |
+| Battery | `battery_std` — vertical battery (U+E19C, 17×16) | `battery_android_full` — horizontal pill battery (U+F304, 20×15) |
+| Battery low | *(not available)* | `battery_android_0` — horizontal empty outline (U+F30D, 20×15) |
+
+The status icons (`check_circle`, `error`, `refresh`) share codepoints
+between the two font families and are identical in both.
+
+The large Material Symbols font file (~10 MB) is **not** stored in the
+repo. Only the extracted bitmap arrays (~200 bytes total) live in
+`material_icons.h`. The TTF can be re-downloaded if needed:
+
+```
+https://github.com/google/material-design-icons/raw/master/variablefont/MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].ttf
+```
+
+### Sprite sheet tool — visual review before use
+
+`icon_tool.py sprite` renders a PNG sprite sheet of all active icons
+for easy visual review before deploying to firmware. Usage:
+
+```bash
+python firmware/tools/icon_tool.py sprite "font.ttf" 20 \
+    --icons "battery=0xF304,bolt=0xF305" --output preview.png
+```
+
+The sprite sheet renders:
+- Black-on-white (matching ePaper colour scheme, unlike earlier versions)
+- Black border around each icon cell
+- Labels with codepoint, name, and pixel dimensions
+- Saved to the project root by default
+
+**Mask gotcha (Pillow):** When pasting a `mode='1'` bitmap onto an RGB
+background, Pillow interprets `0` as transparent and `1` as opaque.
+Since 1-bit images use `fill=0` for black (ink) and `fill=1` for white
+(bg), the paste mask is **inverted** — black ink becomes transparent.
+Fix by converting to 'L' mode and inverting:
+
+```python
+mask = Image.eval(icon_img.convert('L'), lambda x: 255 - x)
+icon_rgb.paste((0, 0, 0), mask=mask)  # black ink paste correctly
+```
+
+### Dependencies
+
+All Python tools in `firmware/tools/` require:
+
+| Package | Used by | Install |
+|---------|---------|---------|
+| `Pillow` | `gfxfont_gen.py`, `font_tool.py`, `icon_tool.py` | `pip install Pillow` |
+| (stdlib only) | `reset_to_bootloader.py`, `capture_boot.py` | No extra deps |
+
+Pillow is the only non-stdlib dependency across all tools.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2

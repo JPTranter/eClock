@@ -256,18 +256,26 @@ static void drawClockFace() {
                 display.print(dateBuf);
                 
                 // Battery line at the top right
-                char batBuf[8];
                 int batPct = getBatteryPercent();
                 if (batPct < 0) {
-                    snprintf(batBuf, sizeof(batBuf), "USB");
+                    // USB power: bolt icon only, no text
+                    display.drawBitmap(display.width() - 4 - icon_bolt_w, 6,
+                        icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, GxEPD_BLACK);
                 } else {
-                    snprintf(batBuf, sizeof(batBuf), "%d%%", batPct);
+                    // Battery: battery icon + percentage
+                    char pctBuf[8];
+                    snprintf(pctBuf, sizeof(pctBuf), "%d%%", batPct);
+                    display.setFont(&FreeSans9pt7b);
+                    int16_t bx, by;
+                    uint16_t bw, bh;
+                    display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
+                    int text_x = display.width() - 4 - icon_battery_w - 4 - bw;
+                    int icon_x = display.width() - 4 - icon_battery_w;
+                    display.drawBitmap(icon_x, 6,
+                        icon_battery_bitmap, icon_battery_w, icon_battery_h, GxEPD_BLACK);
+                    display.setCursor(text_x, 18);
+                    display.print(pctBuf);
                 }
-                int16_t bx, by;
-                uint16_t bw, bh;
-                display.getTextBounds(batBuf, 0, 0, &bx, &by, &bw, &bh);
-                display.setCursor(display.width() - bw - 4, 18);
-                display.print(batBuf);
 
                 // Use the big time font
                 display.setFont(&font);
@@ -302,7 +310,7 @@ static void drawClockFace() {
                 }
                 
                 // Icon vertically aligns with the top of FreeSans9pt text
-                int icon_y = display.height() - 5 - 12;  // 12px to align with ~11px text
+                int icon_y = display.height() - 5 - 15;  // 15px for ~19px icons (was 12px for 16px)
                 display.drawBitmap(4, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
 
                 // Last successful sync time next to the icon
