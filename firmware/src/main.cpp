@@ -32,7 +32,8 @@ enum ClockState {
     STATE_SYNCING,       // Boot: advertising, waiting for first time sync
     STATE_RUNNING,       // Normal: have valid time, ticking
     STATE_RESYNCING,     // Periodic re-sync: advertising for an update
-    STATE_NO_TIME        // Boot sync timed out: no time available (error)
+    STATE_NO_TIME,        // Boot sync timed out: no time available (error)
+    STATE_SLEEPING        // Display off between 11pm and 5am
 };
 
 static ClockState g_state = STATE_SYNCING;
@@ -72,6 +73,13 @@ static const uint32_t BUTTON_DEBOUNCE_MS = 300;
 // semaphore is consumed by the wake mechanism.
 static rtos::Semaphore g_button_sem(0, 1);
 static volatile bool g_button_pending = false;
+
+// Sleep mode: display off between 11pm and 5am. Button wake sets a cooldown
+// so the clock stays awake for 15 minutes before re-entering sleep.
+static uint32_t g_awake_until = 0;
+static const uint32_t WAKE_COOLDOWN = 900000;   // 15 minutes
+static const uint8_t  SLEEP_START_HOUR = 23;    // 11pm
+static const uint8_t  SLEEP_END_HOUR   = 5;     // 5am
 
 // ==== Buttons ==================================================================
 // EN05 has three user buttons on D1, D2, D9: active LOW with INPUT_PULLUP.
@@ -288,8 +296,99 @@ static void drawClockFace() {
                 display.print(syncBuf);
                 break;
             }
+
+            // ---------------------------------------------------------------
+            // SLEEPING: should not be reached (drawSleepIcon is called
+            // separately), but handle gracefully as a blank screen.
+            // ---------------------------------------------------------------
+            case STATE_SLEEPING: {
+                display.setFont(&FreeSansBold24pt7b);
+                const char* msg = "Zz";
+                int16_t zx, zy;
+                uint16_t zw, zh;
+                display.getTextBounds(msg, 0, 0, &zx, &zy, &zw, &zh);
+                display.setCursor((display.width() - zw) / 2 - zx,
+                                  (display.height() + zh) / 2 - 14);
+                display.print(msg);
+                break;
+            }
         }
     } while (display.nextPage());
+}
+
+static void drawSleepIcon() {
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+
+        // Big 'Zz' centred
+        display.setFont(&FreeSansBold24pt7b);
+        const char* msg = "Zz";
+        int16_t mx, my;
+        uint16_t mw, mh;
+        display.getTextBounds(msg, 0, 0, &mx, &my, &mw, &mh);
+        display.setCursor((display.width() - mw) / 2 - mx,
+                          (display.height() + mh) / 2 - 14);
+        display.print(msg);
+
+        // 'Sleeping' below
+        display.setFont(&FreeSans9pt7b);
+        const char* sub = "Sleeping";
+        int16_t sx, sy;
+        uint16_t sw, sh;
+        display.getTextBounds(sub, 0, 0, &sx, &sy, &sw, &sh);
+        display.setCursor((display.width() - sw) / 2 - sx,
+                          (display.height() + mh) / 2 + 14);
+        display.print(sub);
+    } while (display.nextPage());
+}
+
+static void enterSleepMode() {
+    // Draw the sleep icon before cutting panel power
+    drawSleepIcon();
+    g_needs_display_update = false;
+
+    // Stop BLE radio
+    BLE.stopAdvertise();
+
+    // Power off the ePaper panel (D6 MOSFET gate LOW)
+    digitalWrite(EPD_POWER, LOW);
+
+    // Calculate seconds until 5am local time
+    int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
+    if (local_sec < 0) local_sec += 86400;
+    uint32_t sec_to_5am = (SLEEP_END_HOUR * 3600 - local_sec + 86400) % 86400;
+
+    // Block in WFE sleep until a button press or wake-up time
+    uint32_t sleep_ms = (sec_to_5am > 0 && sec_to_5am <= 12 * 3600)
+                        ? sec_to_5am * 1000 : 0;
+    bool woke_by_button = false;
+    if (sleep_ms > 0) {
+        woke_by_button = g_button_sem.try_acquire_for(
+                            std::chrono::milliseconds(sleep_ms));
+    }
+
+    // Re-power the ePaper panel
+    pinMode(EPD_POWER, OUTPUT);
+    digitalWrite(EPD_POWER, HIGH);
+    delay(50);
+    display.init(115200, true, 2, false);
+    display.setRotation(1);
+
+    // If button woke us, set cooldown so we don't immediately re-sleep
+    if (woke_by_button) {
+        g_awake_until = millis() + WAKE_COOLDOWN;
+        anyButtonPressed();   // consume any latent button flag
+    } else {
+        g_awake_until = 0;    // normal 5am wake, allow bedtime check
+    }
+
+    // Transition to re-sync to get fresh time from HA
+    g_state = STATE_RESYNCING;
+    g_needs_display_update = true;
+    startSyncAttempt();
 }
 
 // ==== Tick interval (60 seconds) ==============================================
@@ -426,6 +525,17 @@ void loop() {
         }
 
         case STATE_RUNNING: {
+            // Check if it's time to enter sleep mode (11pm-5am)
+            int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
+            if (local_sec < 0) local_sec += 86400;
+            int local_hour = local_sec / 3600;
+            if ((local_hour >= SLEEP_START_HOUR || local_hour < SLEEP_END_HOUR)
+                && now >= g_awake_until) {
+                g_state = STATE_SLEEPING;
+                enterSleepMode();
+                break;
+            }
+
             // Time for a periodic re-sync?
             if (now - g_last_sync_millis >= SYNC_INTERVAL) {
                 g_state = STATE_RESYNCING;
@@ -434,6 +544,16 @@ void loop() {
             }
             break;
         }
+
+        case STATE_SLEEPING:
+            // Not reached (enterSleepMode() is blocking), but handle safely
+            // if a wake event occurs outside the sleep block.
+            if (now >= g_awake_until) {
+                g_state = STATE_RESYNCING;
+                g_needs_display_update = true;
+                startSyncAttempt();
+            }
+            break;
 
         case STATE_NO_TIME:
         default:

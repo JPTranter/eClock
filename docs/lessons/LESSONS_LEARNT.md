@@ -378,6 +378,58 @@ if (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
 
 When USB is connected, the battery voltage divider reading is invalid (VBUS overrides the voltage). The `getBatteryPercent()` function returns -1 when VBUS is detected, and the display renders "USB" instead of a percentage.
 
+## 14. Night sleep mode: display off between 11pm and 5am (verified 2026-08-23)
+
+### Motivation
+
+The clock runs fully idle between bedtime and morning — no one reads it, but the ePaper panel refreshes once per minute and BLE re-syncs every hour. Power-gating the panel and disabling BLE for 6 hours saves ~390 µAh per night (~3 days/month on a 500 mAh battery).
+
+### Implementation
+
+A new `STATE_SLEEPING` state is checked in the main loop when `g_state == STATE_RUNNING`. It examines the **local hour** (computed from `g_epoch + g_tz_offset`) and triggers sleep if hour ≥ 23 or hour < 5.
+
+```cpp
+int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
+if (local_sec < 0) local_sec += 86400;
+int local_hour = local_sec / 3600;
+if ((local_hour >= SLEEP_START_HOUR || local_hour < SLEEP_END_HOUR)
+    && now >= g_awake_until) {
+    g_state = STATE_SLEEPING;
+    enterSleepMode();
+}
+```
+
+The `enterSleepMode()` function:
+1. Draws a "Zz / Sleeping" screen on the ePaper (last thing the user sees)
+2. Calls `BLE.stopAdvertise()` to shut down the radio
+3. Drives `EPD_POWER` (D6) LOW to remove power from the entire panel + MOSFET
+4. Calculates seconds until 5am: `(5*3600 - local_sec + 86400) % 86400`
+5. Blocks on `g_button_sem.try_acquire_for(sleep_ms)` — WFE sleep with a strict timeout
+6. On wake (button or timeout), re-powers the panel via `display.init()`, which takes ~3.4s for a full refresh
+7. Enters `STATE_RESYNCING` to get fresh time from Home Assistant
+
+### Button wake with cooldown
+
+A button press during sleep wakes the CPU instantly (GPIOTE → semaphore release → `try_acquire_for` returns early). The clock then stays awake for 15 minutes (`WAKE_COOLDOWN = 900000 ms`) before re-entering sleep. This lets the user read the time, then let the clock auto-sleep without wasting the night's power savings.
+
+### Power-gating the ePaper
+
+Key detail: when the panel is unpowered between 11pm and 5am, the SSD1680 controller loses its internal frame buffer. `display.init()` performs a full hardware clear (~3.4s) before any draw. This is the correct trade-off because there is no need for a partial-refresh-speed wake during sleep hours — the 3.4s re-init is invisible to the user who wakes the clock by button press.
+
+### Battery math
+
+| Component | Day (18h) avg | Night (6h) avg | Weighted 24h |
+|-----------|-------------|---------------|--------------|
+| Display refresh | 625 µA | 0 µA (panel off) | ~469 µA |
+| BLE radio | 100 µA | 0 µA (radio off) | ~75 µA |
+| Sleep baseline + CPU ticks | 20 µA | 3 µA (pure WFE) | ~16 µA |
+| **Total** | **~745 µA** | **~3 µA** | **~560 µA** |
+
+**500 mAh battery:** ~25 days → ~37 days (gain of 12 days/month)
+**1000 mAh battery:** ~50 days → ~74 days
+
+*Note: the 15-minute button cooldown adds some awake time during the night, reducing the savings slightly. Each button-press-wake episode costs ~3.5 mAh (3.4s re-init + 15 min of normal operation), so ~1 night of occasional reading.*
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2
