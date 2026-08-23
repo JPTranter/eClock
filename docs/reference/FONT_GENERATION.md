@@ -73,23 +73,28 @@ for pt in [72, 84, 96, 105, 110, 120]:
 
 | Measure | What it tells you | Target |
 |---|---|---|
-| `ink_h` | Physical pixel height of a digit (the black part) | **≥ 70 px** for a bold face, ≤ 128 |
-| `time_w` | Width of "88:88" in pixels | **≤ 296** |
-| `margin` | Empty space on each side | **≥ 8 px** (avoid clipping) |
+| `ink_h` | Physical pixel height of a digit (the black part) | **≥ 55 px**, ideally filling 90/128 |
+| `time_w` | Width of "88:88" in pixels | **≤ 296** for safe fit; small overflow on worst-case combos like "00:00" is acceptable |
+| `margin` | Empty space on each side | **≥ 0 px** for common times like "12:34"; a few pixels of overflow on `08:02` or `00:00` is fine |
 | `line_h` | Font's full vertical metrics (ascent + descent) | Can exceed 128 — only the ink matters |
 
-### What different inks mean
 
-| Font | Size | Ink h | Fill | Notes |
-|---|---|---|---|---|
-| Arial Bold | 105pt | 76 px | 59% | Original, 33 KB glyph data |
-| Moirai One | 84pt | 67 px | 52% | Decorative, 4.3 KB |
-| Modak | 105pt | 69 px | 54% | Current, 5.2 KB |
 
-A font like Modak has **large ascenders/descenders** relative to its
-x-height, so at 105pt the ink is only 69 px even though the line
-metrics reach 159 px. That's normal — just need a larger point size
-than you'd expect from the line height alone.
+### Understanding the trade-offs
+
+For wide typefaces like Chango, you may not be able to satisfy both
+horizontal and vertical fill simultaneously at any single point size.
+Chango at 80pt is the practical maximum:
+
+| Time string | Width | Margin | Fits? |
+|---|---|---|---|
+| `12:34` | 282 px | 7 px each side | Comfortably |
+| `08:02` | 302 px | -3 px each side | ~1 digit-stroke clips off left/right |
+| `00:00` | 310 px | -7 px each side | ~2 pixels clip |
+
+Since `12:34` is the dominant display and even `08:02` only loses a
+hairline, 80pt gives the best vertical presence without visible
+clipping in practice.
 
 ## Step 2: Generate the header
 

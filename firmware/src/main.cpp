@@ -14,7 +14,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontModak105.h"  // 105pt Modak for time digits (0-9, :)
+#include "FontChango80.h"  // 80pt Chango for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -265,9 +265,9 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~22. Bottom text top edge is ~110.
                 // Available space is 110 - 22 = 88 pixels. Center is 22 + 44 = 66.
-                // Modak 105pt has typical yOff=-106, h=69. Center of ink relative
-                // to baseline is -106 + 34.5 = -71.5. Baseline = 66 - (-71.5) = 138.
-                display.setCursor((display.width() - tw) / 2 - tx, 138);
+                // Chango 80pt has typical yOff=-82, h=60. Center of ink relative
+                // to baseline is -82 + 30 = -52. Baseline = 66 - (-52) = 118.
+                display.setCursor((display.width() - tw) / 2 - tx, 118);
                 display.print(timeBuf);
 
                 // Status line at the very bottom right
