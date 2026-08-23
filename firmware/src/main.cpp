@@ -11,6 +11,7 @@
 #endif
 
 #include "board_pins.h"
+#include "material_icons.h"
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
@@ -283,22 +284,33 @@ static void drawClockFace() {
                 display.setCursor((display.width() - tw) / 2 - tx, 120);
                 display.print(timeBuf);
 
-                // Synced status line at the bottom left
-                char syncBuf[32];
+                // Status icon + last sync time at the bottom left
+                uint8_t icon_w, icon_h;
+                const uint8_t* icon_bmp;
                 if (g_state == STATE_RESYNCING || g_state == STATE_SYNCING) {
-                    snprintf(syncBuf, sizeof(syncBuf), "Syncing...");
+                    icon_bmp = icon_syncing_bitmap;
+                    icon_w = icon_syncing_w;
+                    icon_h = icon_syncing_h;
                 } else if (g_last_sync_failed) {
-                    snprintf(syncBuf, sizeof(syncBuf), "Sync failed");
+                    icon_bmp = icon_failed_bitmap;
+                    icon_w = icon_failed_w;
+                    icon_h = icon_failed_h;
                 } else {
-                    snprintf(syncBuf, sizeof(syncBuf), "Synced %02u:%02u", g_last_sync_hour, g_last_sync_minute);
+                    icon_bmp = icon_synced_bitmap;
+                    icon_w = icon_synced_w;
+                    icon_h = icon_synced_h;
                 }
                 
+                // Icon bottom aligns with text baseline
+                int icon_y = display.height() - 5 - icon_h;
+                display.drawBitmap(4, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
+
+                // Last successful sync time next to the icon
+                char syncTime[8];
+                snprintf(syncTime, sizeof(syncTime), "%02u:%02u", g_last_sync_hour, g_last_sync_minute);
                 display.setFont(&FreeSans9pt7b);
-                int16_t sx, sy;
-                uint16_t sw, sh;
-                display.getTextBounds(syncBuf, 0, 0, &sx, &sy, &sw, &sh);
-                display.setCursor(4, display.height() - 5);
-                display.print(syncBuf);
+                display.setCursor(4 + icon_w + 4, display.height() - 5);
+                display.print(syncTime);
 
                 // AM/PM at the bottom right
                 int16_t apx, apy;

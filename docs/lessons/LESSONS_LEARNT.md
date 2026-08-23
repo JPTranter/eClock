@@ -471,6 +471,88 @@ The tool automatically detects whether the colon's yOffset needs manual
 adjustment (difference >5 px from digit midpoints), and computes the
 correct baseline_y for the centering formula.
 
+## 16. Material Icons for status indicators (verified 2026-08-23)
+
+### Why icons instead of text
+
+The status line originally showed "Synced HH:MM", "Syncing...", or
+"Sync failed" as text. Replacing the text labels with Material Icons
+saves screen space, reads faster at a glance, and eliminates the
+width jitter from different-length text strings.
+
+### Icon selection
+
+Three Material Icons were chosen from the official Google Material Icons
+font downloaded from GitHub (`MaterialIcons-Regular.ttf`):
+
+| State | Icon | Unicode | Name | Fill |
+|-------|------|---------|------|------|
+| Synced | ✓ in circle | U+E86C | check_circle | ~55% |
+| Syncing | ↻ arrows | U+E5D5 | refresh | ~23% |
+| Failed | ✕ in circle | U+E000 | error | ~56% |
+
+The `check_circle` and `error` icons share a matching circular outline,
+giving a cohesive look side-by-side.
+
+### Font size and rendering
+
+Icons were extracted from the TTF at **14pt**, then converted to 1-bit
+MSB-packed bitmap arrays. 14pt gives good boldness on the 200dpi ePaper
+display without anti-aliasing artifacts — the filled-area density is
+high enough that strokes are visible.
+
+Key metrics:
+- check_circle: 14×13px (26 bytes of bitmap data)
+- error: 14×13px (26 bytes)
+- refresh: 14×12px (24 bytes)
+
+### Rendering on ePaper
+
+Adafruit GFX's `drawBitmap()` renders raw bitmap data at given
+coordinates. Icons sit at the bottom left with the last-sync time
+printed next to them using FreeSans9pt7b:
+
+```cpp
+int icon_y = display.height() - 5 - icon_h;
+display.drawBitmap(4, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
+display.setCursor(4 + icon_w + 4, display.height() - 5);
+display.print(syncTime);
+```
+
+The icon bottom edge aligns with the text baseline by subtracting
+`icon_h` from the text baseline Y.
+
+### icon_tool.py — icon extraction utility
+
+`firmware/tools/icon_tool.py` extracts any character from any TrueType
+icon font and generates a ready-to-use C header with `PROGMEM` bitmap
+data, matching the format in `material_icons.h`:
+
+```bash
+# Export a single icon
+python firmware/tools/icon_tool.py export "C:/path/to/icons.ttf" 14 0xE86C
+# Exports: 14pt check_circle → C bitmap array
+
+# Export all named icons from a config
+python firmware/tools/icon_tool.py batch "C:/path/to/icons.ttf" 14 --icons \
+    "check=0xE86C,error=0xE000,refresh=0xE5D5"
+# Exports: complete material_icons.h replacement
+```
+
+The tool automatically:
+- Renders the glyph at the requested size
+- Trims empty rows from the top/bottom (minimizes bitmap size)
+- Packs to MSB-first byte arrays
+- Outputs in the same format as `material_icons.h`
+
+### Storing bitmaps vs including the full font
+
+The font file `MaterialIcons-Regular.ttf` is ~350 KB — far too large to
+embed in firmware (current firmware is ~360 KB total flash including
+all code). Instead, only the three needed glyphs are extracted as tiny
+manual bitmaps (~76 bytes total). This is the correct trade-off for
+constrained flash.
+
 ## Reference resources
 
 - GxEPD2: https://github.com/ZinggJM/GxEPD2
