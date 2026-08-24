@@ -198,9 +198,13 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
         print("ERROR: no icons rendered")
         sys.exit(1)
     
-    cell_h = 24
+    # Auto-size based on actual glyph dimensions
+    max_ink_w = max(r[2] for r in rendered)
+    max_ink_h = max(r[3] for r in rendered)
+    cell_pad = 4
+    cell_h = max_ink_h + cell_pad * 2 + 4  # +4 for border + clearance
     label_w = max_label_w * 7 + 20
-    icon_area_w = 60
+    icon_area_w = max_ink_w + cell_pad * 2 + 4  # +4 for border
     cell_w = label_w + icon_area_w
     sheet_h = cell_h * len(rendered)
     
@@ -218,17 +222,22 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
         mask = Image.eval(icon_img.convert('L'), lambda x: 255 - x)
         icon_rgb = Image.new('RGB', (w, h), (255, 255, 255))  # white bg
         icon_rgb.paste((0, 0, 0), mask=mask)  # black fg
-        sheet.paste(icon_rgb, (4, y + (cell_h - h) // 2))
         
-        # Black border around the icon cell
-        border_x = 2
-        border_y = y + (cell_h - h) // 2 - 1
-        border_w = w + 3
+        # Centre glyph horizontally within the widest glyph's space,
+        # and vertically within the cell
+        x_offset = cell_pad + 2 + (max_ink_w - w) // 2
+        y_offset = (cell_h - h) // 2
+        sheet.paste(icon_rgb, (x_offset, y + y_offset))
+        
+        # Black border around the icon cell (sized for the widest glyph)
+        border_x = cell_pad + 1
+        border_y = y + y_offset - 1
+        border_w = max_ink_w + 2
         border_h = h + 2
         draw.rectangle([border_x, border_y, border_x + border_w, border_y + border_h],
                        outline=(0, 0, 0))
         
-        draw.text((w + 12, y + 3), label, fill=0)
+        draw.text((icon_area_w + 4, y + 3), label, fill=0)
     
     sheet.save(output_path)
     print(f"Sprite sheet saved: {output_path}")

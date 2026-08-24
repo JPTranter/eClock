@@ -288,6 +288,26 @@ def cmd_generate(ttf_path, pt_size, output_path, copyright_str=None,
     print(f"  Baseline_y    = {GAP_CENTER} - ({midpoint:.1f}) = {int(round(baseline))}")
     print()
 
+    # Per-glyph yOffset check (from TTF metrics, not yet in header)
+    yos = {}
+    for c in "0123456789":
+        bbox = font.getbbox(c)
+        if bbox and bbox[2] > 0:
+            yos[c] = -bbox[3]
+    yo_vals = set(yos.values())
+    if len(yo_vals) > 1:
+        from collections import Counter
+        mode_yo = Counter(yos.values()).most_common(1)[0][0]
+        print(f"  \u26a0 BASELINE VARIANCE in TTF metrics — per-digit yOffsets:")
+        for c in "0123456789":
+            if c in yos:
+                mark = " \u2190 differs" if yos[c] != mode_yo else ""
+                print(f"      '{c}': yOff = {yos[c]:4d}{mark}")
+        print(f"  \u2192 After generation, normalise with: python font_tool.py fix <header.h>")
+    else:
+        print(f"  \u2713 Baseline consistent in TTF (all yOff={list(yo_vals)[0]})")
+    print()
+
     # Check whether the colon needs manual yOffset adjustment
     col_mid = col_yoff + col_ink / 2
     diff = col_mid - midpoint
@@ -379,6 +399,19 @@ def cmd_center(header_path):
     print(f"    Average yOff = {avg_yoff}")
     print(f"    Average h    = {avg_h}")
 
+    # Check per-glyph yOffset consistency
+    from collections import Counter
+    yo_counts = Counter(g["yo"] for g in digit_glyphs)
+    if len(yo_counts) > 1:
+        mode_yo = yo_counts.most_common(1)[0][0]
+        print(f"    \u26a0 BASELINE VARIANCE — yOffsets differ across digits:")
+        for i, g in enumerate(digit_glyphs):
+            mark = " \u2190 differs" if g["yo"] != mode_yo else ""
+            print(f"      '{chr(0x30+i)}': yOff={g['yo']:4d}, h={g['h']:2d}{mark}")
+        print(f"    \u2192 Normalise: python font_tool.py fix {header_path}")
+    else:
+        print(f"    \u2713 Baseline consistent (all yOff={digit_glyphs[0]['yo']})")
+
     if colon_glyph:
         print(f"  Colon:")
         print(f"    yOff = {colon_glyph['yo']}, h = {colon_glyph['h']}")
@@ -453,6 +486,105 @@ def cmd_layout(ttf_path, pt_size, is12h=True):
     print(f"  python firmware/tools/icon_tool.py sprite \"{ttf_path}\" {pt_size}")
 
 
+# ── Fix (normalize yOffsets) ─────────────────────────────────────────────────
+
+
+def cmd_fix(header_path):
+    """Normalize yOffset in an existing GFXfont header.
+    
+    Sets all digit yOffsets to the mode value, then adjusts the colon's
+    yOffset so its visual midpoint aligns with the digits' midpoint.
+    Overwrites the file in place."""
+
+    if not os.path.exists(header_path):
+        print(f"ERROR: file not found: {header_path}")
+        sys.exit(1)
+
+    with open(header_path, "r") as f:
+        content = f.read()
+
+    # Find the glyph table bounds
+    m = re.search(
+        r"(static const GFXglyph font_glyphs\[\] = \{)(.*?)(\};)",
+        content, re.DOTALL
+    )
+    if not m:
+        print("ERROR: could not find font_glyphs table in header")
+        sys.exit(1)
+
+    prefix = m.group(1)
+    body   = m.group(2)
+    suffix = m.group(3)
+
+    # Parse individual glyph lines
+    glyphs = []
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//") or stripped.startswith("/*"):
+            continue
+        nums = re.findall(r"-?\d+", stripped)
+        if len(nums) >= 6:
+            glyphs.append({
+                "offset": int(nums[0]),
+                "w": int(nums[1]),
+                "h": int(nums[2]),
+                "xa": int(nums[3]),
+                "xo": int(nums[4]),
+                "yo": int(nums[5]),
+                "raw": line,
+            })
+
+    if len(glyphs) < 11:
+        print(f"WARNING: expected 11 glyphs (10 digits + colon), found {len(glyphs)}")
+
+    digit_glyphs = glyphs[:10]
+    colon_glyph = glyphs[-1] if len(glyphs) >= 11 else None
+
+    # -- Mode yOffset
+    from collections import Counter
+    yo_counts = Counter(g["yo"] for g in digit_glyphs)
+    mode_yo = yo_counts.most_common(1)[0][0]
+    current_yos = sorted(set(g["yo"] for g in digit_glyphs))
+
+    if len(current_yos) <= 1:
+        print(f"  Digits already consistent (all yOff={mode_yo}). Checking colon...")
+    else:
+        print(f"  Digit yOffsets before: {current_yos}")
+        print(f"  Normalizing to mode:   {mode_yo}")
+
+    # -- Colon centering
+    if colon_glyph:
+        avg_h = sum(g["h"] for g in digit_glyphs) // len(digit_glyphs)
+        digit_mid = mode_yo + avg_h / 2.0
+        col_target = int(round(digit_mid - colon_glyph["h"] / 2.0))
+        print(f"  Colon yOffset: {colon_glyph['yo']} -> {col_target}  "
+              f"(midpoint align: {digit_mid:.1f})")
+    else:
+        col_target = None
+
+    # -- Rebuild the glyph table
+    new_lines = []
+    for g in glyphs:
+        old_line = g["raw"]
+        new_yo = mode_yo
+        if g is colon_glyph and col_target is not None:
+            new_yo = col_target
+        new_line = re.sub(r"(-?\d+)\s*\},?\s*$", f"{new_yo} }},", old_line)
+        new_lines.append(new_line)
+
+    new_body = "\n".join(new_lines)
+    new_table = f"{prefix}\n{new_body}\n{suffix}"
+    new_content = content.replace(m.group(0), new_table)
+
+    with open(header_path, "w") as f:
+        f.write(new_content)
+
+    print(f"  Wrote: {header_path}")
+    print(f"  Run sprite sheet to verify:")
+    print(f"    python firmware/tools/icon_tool.py sprite ...")
+    print()
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -460,16 +592,18 @@ def main():
     if len(sys.argv) < 3:
         print(__doc__)
         print("Commands:")
-        print("  scan    <ttf_path>              — size scan")
-        print("  generate <ttf> <pt> <output.h>  — generate + centering")
-        print("  center  <header.h>              — centering from existing header")
-        print("  layout  <ttf> <pt>              — full layout report (margins, centering)")
+        print("  scan    <ttf_path>              - size scan")
+        print("  generate <ttf> <pt> <output.h>  - generate + centering")
+        print("  center  <header.h>              - centering from existing header")
+        print("  layout  <ttf> <pt>              - full layout report (margins, centering)")
+        print("  fix     <header.h>              - normalize yOffsets + colon centering")
         print()
         print("Examples:")
-        print("  python font_tool.py scan \"C:/path/to/font.ttf\"")
+        print('  python font_tool.py scan "C:/path/to/font.ttf"')
         print("  python font_tool.py generate font.ttf 82 src/FontName.h \\")
-        print("          --copyright \"Copyright (c) 2024 Type Foundry\"")
+        print('          --copyright "Copyright (c) 2024 Type Foundry"')
         print("  python font_tool.py center src/FontChango82.h")
+        print("  python font_tool.py fix src/FontChango82.h")
         sys.exit(1)
 
     cmd = sys.argv[1]
@@ -516,6 +650,12 @@ def main():
         if len(sys.argv) >= 5 and sys.argv[4] == "--24h":
             is12h = False
         cmd_layout(sys.argv[2], sys.argv[3], is12h)
+
+    elif cmd == "fix":
+        if len(sys.argv) < 3:
+            print("Usage: python font_tool.py fix <header.h>")
+            sys.exit(1)
+        cmd_fix(sys.argv[2])
 
     else:
         print(f"Unknown command: {cmd}")

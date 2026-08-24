@@ -706,23 +706,78 @@ Outputs all positioning constants for the firmware `main.cpp`.
 - mbed OS Semaphore: https://os.mbed.com/docs/mbed-os/v6.16/apis/semaphore.html
 - Datasheets: not committed (proprietary); download links in
   `docs/hardware/datasheets/README.md`
-# Phase 5: Hardware Quirks & Font Spacing
 
-## Overview
-During the final polish of the eClock firmware, we encountered two very distinct hardware/software integration quirks that caused a freezing bug and a visual layout bug. This document captures the root causes and the solutions.
+## 17. Baseline variance across font glyphs (verified 2026-08-24)
 
-## Lesson 1: Mbed OS SPI Initialization & GPIO Interrupt Storms
-**Problem:**
-The top-right user button on the EN05 shield (BUTTON_3) is physically wired to the `D9` pin. This pin is also the default hardware SPI `MISO` line for the nRF52840. While the ePaper display only receives data (it does not use MISO to transmit), the Arduino Mbed OS `SPIClass` takes complete control of the pin when `display.init()` (and inherently `SPI.begin()`) is called.
-When `SPI.begin()` initializes the MISO pin, it configures the GPIO pad as an input but *removes* any previously applied internal pull-up resistors. Because the button relies on an active-low `INPUT_PULLUP` configuration, the pin was left floating. This floating state caused environmental noise to trigger the `FALLING` edge interrupt millions of times per second. The resulting interrupt storm starved the main loop of CPU time, causing the clock to completely freeze at the "Syncing..." screen without ever triggering the 30-second timeout.
+### The problem
 
-**Solution:**
-We initially attempted to completely detach the interrupt and power down the SPI peripheral (`SPI.end()`) when the clock was idle, but this caused severe Mbed OS crashes (`hard faults`) when manipulating the interrupt allocation table. 
-The cleaner, more elegant solution was to realize that the SPI peripheral *does not care* if its MISO input pin has a pull-up resistor. By simply calling `pinMode(BUTTON_3, INPUT_PULLUP)` *after* `display.init()` is called, we force the pull-up resistor back onto the pin. The pin stops floating, the interrupt storm ceases, and the button works perfectly because pressing it cleanly pulls the MISO line to GND.
+Some TrueType fonts (notably Chango) report different `yOffset` values
+for different digit glyphs. In Adafruit GFX, ALL characters rendered
+by `print()` share a single baseline — the y-coordinate from `setCursor()`.
+Each glyph's `yOffset` is the distance from that baseline to the top of
+its bitmap. When glyphs have different yOffsets, they sit at different
+heights on the shared baseline.
 
-## Lesson 2: Adafruit_GFX Text Wrapping on Custom Fonts
-**Problem:**
-At precisely 10:09 (and 00:00), the clock display was missing its final digit (e.g. `10:0` instead of `10:09`). The custom 82pt `Chango` font has extremely wide characters (a `0` is 71px wide with a 73px advance). The total calculated width of `10:09` was roughly 301px. Because the ePaper display is only 296px wide, `Adafruit_GFX` determined that the final digit exceeded the right boundary. Because `setTextWrap(true)` is the default behavior in `Adafruit_GFX`, the library gracefully wrapped the final `9` down to the next "line"—which fell completely off the bottom edge of the display, effectively vanishing.
+Chango at 82pt had a 2px spread:
 
-**Solution:**
-Without access to the original TTF font generation script to re-export the font at 78pt, we directly patched the `GFXglyph` font table inside `FontChango82.h`. By reducing the `xAdvance` property of all numeric digits by 8 pixels, we artificially squished the characters closer together. This allowed the widest possible time string (`00:00`) to comfortably fit within the 296px constraint. Additionally, we explicitly disabled text wrapping (`display.setTextWrap(false)`) so that if a string ever strays a pixel out of bounds, it simply clips harmlessly at the edge rather than disappearing.
+```
+'0': yOff=-84   '1': yOff=-82   '2': yOff=-82   '3': yOff=-84
+'4': yOff=-82   '5': yOff=-84   '6': yOff=-84   '7': yOff=-83
+'8': yOff=-84   '9': yOff=-84
+```
+
+'1', '2', and '4' sat 2 pixels lower than the others. The colon at
+yOff=-83 was 1px off and its midpoint didn't align with the digits'.
+
+This was not caught by the original FONT_GENERATION.md guide because:
+1. The colon alignment pitfall was documented, but digit-to-digit
+   variance was not
+2. The `center` command only showed averages, not per-glyph values
+3. After the xAdvance patch to fix horizontal overflow, nobody visually
+   checked the sprite sheet for baseline consistency
+
+### The fix
+
+Manually normalised yOffsets in `FontChango82.h`:
+- All 10 digits → -84 (the mode value)
+- Colon → -82 (centered: digit midpoint -54.5, colon midpoint -54.5)
+
+### Tooling: prevent recurrence
+
+Three additions to `font_tool.py`:
+
+1. **`generate` now checks TTF metrics** for per-digit yOffset variance
+   before the header is even written. Warns with a per-glyph listing
+   and the fix command.
+
+2. **`center` now reports per-glyph yOffsets** with a `← differs` marker
+   when any digit deviates from the mode value.
+
+3. **`fix <header.h>` command** reads an existing GFXfont header,
+   normalises all digit yOffsets to the mode value, then adjusts the
+   colon's yOffset so its visual midpoint matches the digits'. One
+   command — no manual arithmetic.
+
+FONT_GENERATION.md updated with the fix step in the quickest path and
+a "Common gotcha: baseline variance across digits" section.
+
+## 18. Sprite sheet cell sizing for large fonts (verified 2026-08-24)
+
+### The problem
+
+`icon_tool.py sprite` had hardcoded cell dimensions: `cell_h=24` and
+`icon_area_w=60`. These were chosen for 14-20pt Material Icons. When
+rendering an 82pt time font, each glyph was ~62×71 px — far larger than
+the cells. Every glyph overflowed into the next row, making the sprite
+sheet useless for visual review.
+
+The root cause was the tool not adapting to its input. The sprite command
+was designed for status icons and nobody had ever fed it a display font.
+
+### The fix
+
+`cmd_sprite` now computes `max_ink_w` and `max_ink_h` from the actual
+rendered glyphs and sizes cells dynamically. Glyphs are centered both
+horizontally (within the widest glyph's space) and vertically (within
+the tallest glyph's space). Works identically for 20pt Material Icons
+and 82pt display fonts.

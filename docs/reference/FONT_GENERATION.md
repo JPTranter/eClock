@@ -7,8 +7,8 @@
 ## Quickest path: font_tool.py (recommended)
 
 The all-in-one tool at `firmware/tools/font_tool.py` wraps the entire
-workflow — sizing scan → generation → centering math — in a single
-command. It depends on Pillow (`pip install Pillow`).
+workflow — sizing scan → generation → fix → centering math — in a
+single command. It depends on Pillow (`pip install Pillow`).
 
 ```bash
 # Step 1: Scan sizes
@@ -19,13 +19,17 @@ python firmware/tools/font_tool.py generate "C:/path/to/font.ttf" 82 \
     firmware/src/FontName.h \
     --copyright "Copyright (c) 2024, Type Foundry"
 
-# Step 3: Check centering from an existing header
+# Step 3: Normalize yOffsets (critical — prevents uneven baselines)
+python firmware/tools/font_tool.py fix firmware/src/FontName.h
+
+# Step 4: Verify centering from the fixed header
 python firmware/tools/font_tool.py center firmware/src/FontName.h
 ```
 
 The `generate` command prints the exact `setCursor` line to paste into
-`drawClockFace()`, shows width checks for common time strings, and
-detects whether the colon needs yOffset adjustment.
+`drawClockFace()`, shows width checks for common time strings, detects
+baseline variance across digits, and flags whether the colon needs
+yOffset adjustment.
 
 ## Toolchain (low-level)
 
@@ -221,6 +225,41 @@ For Moirai 84pt we moved it from -102 to -86 (raised it 16 px).
 For Modak 105pt the colon and digits naturally share yOffset=-106
 and it aligned correctly — check what your font needs.
 
+**Better:** run `python font_tool.py fix <header.h>` after generation.
+This normalises all digit yOffsets to the mode value AND adjusts the
+colon's yOffset so its visual midpoint aligns with the digits'. It saves
+manually editing the header and doing mental arithmetic.
+
+### Common gotcha: baseline variance across digits
+
+Some fonts (notably Chango) have different yOffset values for different
+digit glyphs. For example, Chango at 82pt gave:
+
+```
+'0': yOff=-84   '1': yOff=-82   '2': yOff=-82   '3': yOff=-84
+'4': yOff=-82   '5': yOff=-84   '6': yOff=-84   '7': yOff=-83
+'8': yOff=-84   '9': yOff=-84
+```
+
+This 2px spread is noticeable — '1', '2', and '4' sit 2 pixels lower
+than the others on the shared baseline. The cause is the font's own
+per-glyph metrics: `gfxfont_gen.py` faithfully writes whatever Pillow
+reports for each glyph's bounding box.
+
+**Detection:** both `generate` and `center` now check for variance and
+print a per-glyph listing with a `← differs` marker.
+
+**Fix:** `python font_tool.py fix src/FontName.h` — normalises all
+digit yOffsets to the mode value, then centres the colon relative to
+the digits' midpoint. Rerun after fixing to confirm the header is clean.
+
+### Common gotcha: colon alignment (legacy — fixed by `fix` command)
+
+The `fix` command handles colon centering automatically. The manual
+process below is retained for reference:
+
+**Fix:** manually edit the colon's yOffset in the header file.
+
 ## Step 5: Build & flash
 
 ```bash
@@ -253,9 +292,18 @@ metrics, used only for multi-line rendering (not relevant here).
 ## Quick reference
 
 ```bash
-# Generate font (digits + colon only)
+# Full workflow using font_tool.py (recommended)
+python firmware/tools/font_tool.py scan "C:/path/to/font.ttf"
+python firmware/tools/font_tool.py generate "C:/path/to/font.ttf" 82 src/FontNAME.h
+python firmware/tools/font_tool.py fix src/FontNAME.h        # normalise yOffsets + colon
+python firmware/tools/font_tool.py center src/FontNAME.h     # verify
+
+# Low-level: generate font header directly (digits + colon only)
 python firmware/tools/gfxfont_gen.py font.ttf SIZE 48 58 src/FontNAME.h
 
-# Check whether colon needs adjustment
-grep -A12 "font_glyphs" src/FontNAME.h  # compare yOffsets
+# Generate sprite sheet for visual review
+python firmware/tools/icon_tool.py sprite "font.ttf" 82 0x30 0x31 0x32 0x33 0x34 0x35 0x36 0x37 0x38 0x39 0x3A
+
+# Check whether yOffsets are consistent
+python firmware/tools/font_tool.py center src/FontNAME.h     # prints per-glyph listing
 ```
