@@ -781,3 +781,96 @@ rendered glyphs and sizes cells dynamically. Glyphs are centered both
 horizontally (within the widest glyph's space) and vertically (within
 the tallest glyph's space). Works identically for 20pt Material Icons
 and 82pt display fonts.
+
+## 19. BLE MAC address: BLE.address() works, HCI.localAddr does not on Cordio (verified 2026-08-25)
+
+### The problem
+
+`HCI.localAddr` is never populated on the mbed Cordio BLE stack. Every byte
+stays `0x00` because the field is only written when `readBdAddr()` is called,
+and the Cordio stack doesn't call it during init.
+
+### The fix
+
+Use `BLE.address()` which sends the HCI `READ_BD_ADDR` command and returns the
+real MAC as a String. The method internally calls `readBdAddr()` and formats
+the result:
+
+```cpp
+String mac = BLE.address();
+// Returns "f3:d2:b5:57:d1:1f" etc.
+```
+
+### Timing trap
+
+The first `BLE.address()` call before `BLE.begin()` returns zeros. If you
+display the MAC on a screen drawn before BLE init, the user sees all zeros.
+Draw the sync screen, then call `BLE.begin()`, then redraw:
+
+```cpp
+drawClockFace();         // initial "Syncing..." — MAC may be zeros
+BLE.begin();
+drawClockFace();         // redraw after BLE init — MAC is valid now
+```
+
+## 20. xAdvance squish reveals hidden horizontal headroom (verified 2026-08-25)
+
+### The problem
+
+The font comparison tables in `FONT_GENERATION.md` quoted pre-squish widths
+(e.g. "82pt widest is `10:00` at 293px"). After the Phase 5 fix applied a
+uniform −8px squish to xAdvance, the actual rendered width was 275px — 18px
+narrower than documented. The docs had been lying about the true ceiling since
+the squish was applied.
+
+### The fix
+
+Update the docs with the real, squished widths. The sequence matters:
+
+1. Generate the font header at the target size via `gfxfont_gen.py`
+2. Edit the glyph table to reduce xAdvance (typically `xAdvance = width − 8`
+   for Chango at 82–88pt)
+3. Run `font_tool.py fix` to normalise yOffsets + centre colon
+4. Run `font_tool.py center` to get the real rendered width (it accounts for
+   xAdvance, not raw bbox width)
+5. Update FONT_GENERATION.md with the actual numbers
+
+### The ceiling: 88pt
+
+With the −8px squish, 88pt is the clean ceiling for 12-hour display on a
+296px panel. The widest string `10:44` fits at 290px (6px total margin).
+Every 12-hour time string fits with zero clipping. At 90pt, even `10:44`
+overflows.
+
+## 21. Power budget model — the 1–6 month range (verified 2026-08-25)
+
+The project has had an open question since Phase 3: "does a minute-resolution
+clock fit inside a 500 mAh budget for three months?" A full six-term model
+was written to `docs/research/power-budget-analysis.md`.
+
+### Key finding
+
+The gap between the plausible current range (4–40 mA refresh, 3–50 µA idle)
+maps to 37–335 days of battery life. The 3-month goal is NOT guaranteed at
+1-minute refresh. The single highest-leverage change is slower refresh (5–10
+minutes), which clears 3 months across the whole range.
+
+### Methodology
+
+Run the model at the end of the analysis document:
+
+```python
+python firmware/tools/power_budget.py
+```
+
+It prints the daily energy breakdown and sensitivity matrix. All timing
+values are measured; all current values are parameterised and flagged as
+assumed.
+
+### What to measure
+
+Three measurements collapse the 37–335 day range to a single number:
+
+1. Full-board idle current (WFE, panel powered)
+2. Average current during one partial refresh (880ms window)
+3. SSD1680 idle/standby current with the rail on

@@ -3,11 +3,17 @@
 Update this file at the end of each development session. It is the single place to
 look to answer "where is this project actually up to?"
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 ## Current phase
 
-**Phase 5 signed off. Phase 6 (Enclosure & Final Deployment) tooling polish underway.** Font baseline normalised, sprite tool fixed, `font_tool.py fix` command added.
+**Phase 6 (Review & Polish) underway.** Power budget analysis written and
+documented. Font bumped from 82pt to 88pt (+6pt, 63% → 68% vertical fill).
+MAC address now shown on sync screen for HA configuration. "No Time!" text
+clipping fixed. Stay-awake behaviour hardened (button press during sleep
+keeps clock on until next 11pm, not just 15 min). New board family verified
+(identical XIAO nRF52840 Plus + EN05, recognised by Seeed bootloader PID
+0x0064).
 
 ## Honest state of play
 
@@ -17,28 +23,42 @@ Last updated: 2026-08-24
 | Hardware selected | Yes, in hand |
 | Toolchain | **Verified.** PlatformIO builds both core environments |
 | Upload path | **Verified.** Serial DFU working on `mbed` core; reset script patched for `0x8045` PID |
-| Firmware | **Phase 5 complete.** All UI quirks resolved. Baseline unified across all digits. Builds clean: 360KB flash (44.4%), 74KB RAM (31.5%). |
-| Pinout / board traps | **Verified.** |
-| Display driver approach | **Verified.** Font baseline variance now caught by tooling. Colon centering automated. |
-| Power management | **Phase 3 complete.** SAADC pin conflict solved. System ON idle sleep (WFE) implemented. |
-| BLE time sync (device side) | **Verified.** |
-| BLE time sync (HA side) | **Verified.** |
-| Font tooling | **Hardened.** `fix` command normalises yOffsets. Sprite auto-sizes cells for any font. |
-| Enclosure | Notes only, no CAD |
-| Build instructions | `docs/SETUP.md` written and verified |
+|| Firmware | **Phase 6 in progress.** Font bumped 82→88pt (+6pt, 63%→68% vertical fill). MAC address shown on sync screen. "No Time!" text clipping fixed. Button sleep-wake changed to keep clock on until next 11pm. Builds clean: 360KB flash (44.5%), 74KB RAM (31.5%). |
+|| Pinout / board traps | **Verified.** Second board confirmed identical (XIAO nRF52840 Plus + EN05, Seeed bootloader PID 0x0064). |
+|| Display driver approach | **Verified.** Font baseline variance now caught by tooling. Colon centering automated. |
+|| Power management | **Phase 3 complete — budget now modelled.** Full six-term power model written (`docs/research/power-budget-analysis.md`). Key finding: 3 months not guaranteed at 1-min refresh without measured currents. |
+|| BLE time sync (device side) | **Verified.** MAC address now shown on sync screen for HA configuration. |
+|| BLE time sync (HA side) | **Verified.** |
+|| Font tooling | **Hardened.** `fix` command normalises yOffsets. Sprite auto-sizes cells for any font. |
+|| Power budget | **Modelled but unmeasured.** `docs/research/power-budget-analysis.md` — the project's #1 risk now has a reproducible model. Ready for bench measurement. |
+|| Enclosure | Notes only, no CAD |
+|| Build instructions | `docs/SETUP.md` written and verified |
 
 ## Immediate next steps
 
-1. **Investigate Button 3 (D9):** Mbed SPI peripheral likely blocking GPIO input. Needs hardware-level SPIM PSEL inspection.
-2. Begin Phase 6 (Enclosure & Final Deployment).
-3. Characterise true power consumption in sleep vs advertising.
+1. **Measure power consumption on the bench** — three measurements close the
+   37–335 day range: full-board idle current (WFE), partial-refresh peak/avg
+   current, and SSD1680 idle current with rail on. Methodology in
+   `docs/research/power-budget-analysis.md`.
+2. **Decide on daytime full refresh** — the firmware does zero full refreshes
+   between 05:00 and 23:00. The ghosting test only validated 53 partials; 1080/day
+   is unvalidated. Adding one hourly full refresh costs ~0.01 mAh/day (negligible).
+3. **Begin enclosure design** — OnShape, accessible charge port, display
+   window, wall-mount and desk-stand options. See `docs/enclosure/DESIGN_NOTES.md`.
+4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
+   target across the whole credible current range (37–335 days → 126+ days).
+   Product trade-off: the minute digit only changes every 5 minutes.
 
 ## Open questions
 
-- What is the actual per-update energy cost, and does a minute-resolution clock fit
-  inside a 500 mAh budget for three months? Unmeasured, and the main project risk.
-- Does the panel remain legible at the temperatures and light levels where it will
-  actually live?
+- Power consumption is modelled but *unmeasured*. The 37–335 day range is the
+  honest answer until bench data replaces it. Three measurements collapse the
+  range.
+- Does the panel remain legible at the temperatures and light levels where it
+  will actually live?
+- Should the clock refresh every 1 minute (current) or every 5/10 minutes
+  (battery-safe)? The decision is now a product choice, not a feasibility
+  question.
 
 ## Phase signoff log
 

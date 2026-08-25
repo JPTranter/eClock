@@ -45,14 +45,19 @@ earlier hands-on work that has not yet been reproduced by code in this repositor
 
 ## Power management / deep sleep
 
-- **Status:** Not started — highest project risk
-- **Needs:** nRF52840 deep-sleep (System OFF vs System ON idle) characterisation, RTC
-  wake sources, measured current in sleep and during a panel refresh, and an energy
-  budget showing whether minute-resolution updates fit 500 mAh for three months.
-- **Design intent:** partial refresh each minute, periodic full refresh to clear
-  ghosting, deep sleep between updates.
-- **Watch for:** whether leaving the panel powered (D6 HIGH) between updates costs
-  meaningful current, versus the cost of a full re-init each wake.
+- **Status:** **Modelled (2026-08-25).** `docs/research/power-budget-analysis.md`
+  provides a six-term, reproducible energy model. Every timing value is measured
+  (partial 880ms, full 3374ms); every current value is flagged as assumed.
+- **Key finding:** 3-month goal is **not guaranteed** at 1-minute refresh.
+  The plausible current range (4–40 mA refresh, 3–50 µA idle) gives 37–335
+  days of battery life. Slowing to 5-minute refresh clears 3 months across
+  the whole range.
+- **Still to prove:** actual measurements of full-board idle current, peak
+  partial-refresh current, and SSD1680 standby current. Three measurements
+  collapse the 37–335 day range.
+- **Also noted:** the firmware does zero daytime full refreshes, but the
+  ghosting test only validated 53 consecutive partials. 1080/day is
+  unvalidated. Decide on a periodic full refresh (negligible power cost).
 
 ## Battery monitoring
 

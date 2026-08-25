@@ -15,7 +15,7 @@
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango82.h"  // 82pt Chango for time digits (0-9, :)
+#include "FontChango88.h"  // 88pt Chango for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
@@ -75,10 +75,13 @@ static const uint32_t BUTTON_DEBOUNCE_MS = 300;
 static rtos::Semaphore g_button_sem(0, 1);
 static volatile bool g_button_pending = false;
 
-// Sleep mode: display off between 11pm and 5am. Button wake sets a cooldown
-// so the clock stays awake for 15 minutes before re-entering sleep.
+// Sleep mode: display off between 11pm and 5am.
+//
+// A button press during sleep cancels the rest of that night's sleep: the
+// clock stays awake through the night and the following day, and shuts down
+// again at the next nightly shutdown (11pm). g_awake_until is a millis()
+// timestamp ("stay awake until"); it is only non-zero after a button wake.
 static uint32_t g_awake_until = 0;
-static const uint32_t WAKE_COOLDOWN = 900000;   // 15 minutes
 static const uint8_t  SLEEP_START_HOUR = 23;    // 11pm
 static const uint8_t  SLEEP_END_HOUR   = 5;     // 5am
 
@@ -215,7 +218,10 @@ static void drawClockFace() {
                 display.print(errMsg);
 
                 display.setFont(&FreeSans9pt7b);
-                display.setCursor(0, display.height());
+                // 2px bottom margin + 5px for descenders (g/y/j drop below the
+                // baseline). Setting the baseline at height() clips them, since
+                // setCursor() positions the baseline, not the text top.
+                display.setCursor(0, display.height() - 2 - 5);
                 display.print(F("Press any button to sync"));
                 break;
             }
@@ -228,7 +234,7 @@ static void drawClockFace() {
                 if (g_epoch > 0) {
                     goto draw_running_face;
                 }
-                
+
                 display.setFont(&FreeSansBold24pt7b);
                 const char* msg = (g_state == STATE_SYNCING)
                                   ? "Syncing..."
@@ -239,7 +245,19 @@ static void drawClockFace() {
                 display.setCursor((display.width() - mw) / 2 - mx,
                                   (display.height() + mh) / 2);
                 display.print(msg);
-                
+
+                // MAC address at the bottom right (useful for HA config)
+                // BLE.address() queries the controller's BD_ADDR via HCI;
+                // HCI.localAddr is not populated on the Cordio stack.
+                String macStr = BLE.address();
+                display.setFont(&FreeSans9pt7b);
+                int16_t macx, macy;
+                uint16_t macw, mach;
+                display.getTextBounds(macStr.c_str(), 0, 0, &macx, &macy, &macw, &mach);
+                display.setCursor(display.width() - macw - 2,
+                                  display.height() - 2 - 4);
+                display.print(macStr);
+
                 break;
             }
 
@@ -300,9 +318,9 @@ static void drawClockFace() {
                 
                 // Top text bottom edge is ~16. Bottom text top edge is ~114.
                 // Available space is 114 - 16 = 98 pixels. Center is 16 + 49 = 65.
-                // Chango 82pt has typical yOff=-84, h=62. Center of ink relative
-                // to baseline is -84 + 31 = -53. Baseline = 65 - (-53) = 118.
-                display.setCursor((display.width() - tw) / 2 - tx, 118);
+                // Chango 88pt has typical yOff=-90, h=64. Center of ink relative
+                // to baseline is -90 + 32 = -58. Baseline = 65 - (-58) = 123.
+                display.setCursor((display.width() - tw) / 2 - tx, 123);
                 display.print(timeBuf);
 
                 // Status icon + last sync time at the bottom left
@@ -407,6 +425,12 @@ static void enterSleepMode() {
     if (local_sec < 0) local_sec += 86400;
     uint32_t sec_to_5am = (SLEEP_END_HOUR * 3600 - local_sec + 86400) % 86400;
 
+    // Seconds until the next nightly shutdown (11pm). Used only when a button
+    // press wakes us: it becomes the "stay awake until" target so the clock
+    // skips the rest of this night but sleeps again at the next 11pm.
+    uint32_t sec_to_shutdown =
+        (SLEEP_START_HOUR * 3600 - local_sec + 86400) % 86400;
+
     // Block in WFE sleep until a button press or wake-up time
     uint32_t sleep_ms = (sec_to_5am > 0 && sec_to_5am <= 12 * 3600)
                         ? sec_to_5am * 1000 : 0;
@@ -427,9 +451,10 @@ static void enterSleepMode() {
     // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
     pinMode(BUTTON_3, INPUT_PULLUP);
 
-    // If button woke us, set cooldown so we don't immediately re-sleep
+    // If a button woke us, keep the clock awake until the next nightly
+    // shutdown (11pm) instead of re-sleeping after a short cooldown.
     if (woke_by_button) {
-        g_awake_until = millis() + WAKE_COOLDOWN;
+        g_awake_until = millis() + sec_to_shutdown * 1000UL;
         anyButtonPressed();   // consume any latent button flag
     } else {
         g_awake_until = 0;    // normal 5am wake, allow bedtime check
@@ -484,6 +509,9 @@ void setup() {
             delay(100);
         }
     }
+
+    // Redraw after BLE init so the MAC address is valid
+    drawClockFace();
 
     BLE.setLocalName("ePaper Clock");
     BLE.setDeviceName("ePaper Clock");
@@ -583,8 +611,10 @@ void loop() {
             int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
             if (local_sec < 0) local_sec += 86400;
             int local_hour = local_sec / 3600;
+            // The (int32_t) cast makes the "awake until" comparison immune to
+            // millis() wraparound (which happens ~49.7 days after boot).
             if ((local_hour >= SLEEP_START_HOUR || local_hour < SLEEP_END_HOUR)
-                && now >= g_awake_until) {
+                && (int32_t)(now - g_awake_until) >= 0) {
                 g_state = STATE_SLEEPING;
                 enterSleepMode();
                 break;
@@ -602,7 +632,7 @@ void loop() {
         case STATE_SLEEPING:
             // Not reached (enterSleepMode() is blocking), but handle safely
             // if a wake event occurs outside the sleep block.
-            if (now >= g_awake_until) {
+            if ((int32_t)(now - g_awake_until) >= 0) {
                 g_state = STATE_RESYNCING;
                 g_needs_display_update = true;
                 startSyncAttempt();

@@ -111,19 +111,33 @@ for pt in [72, 84, 96, 105, 110, 120]:
 
 For wide typefaces like Chango, you may not be able to satisfy both
 horizontal and vertical fill simultaneously at any single point size.
-Chango at 82pt is the practical maximum for 12-hour display (no leading
-zero, so "10:00" is the widest string at 293 px):
 
-| Time string | Width | Margin | Fits? |
-|---|---|---|---|
-| `12:34` | 290 px | 3 px each side | Comfortably |
-| `10:00` | 293 px | **1 px** each side | Tight, but OK |
-| `8:00` | 238 px | 29 px each side | Plenty of room |
+The generator's default `xAdvance = width + 2` is generous. In practice, a
+uniform squish on `xAdvance` recovers horizontal headroom. The current 82pt
+font has `xAdvance = width - 6` (a −8px squish relative to the generator's
+default), and the 88pt font uses the same recipe. The table below shows the
+*actual*, rendered widths including the squish:
 
-Since `12:34` is the dominant display and the worst case `10:00` still
-fits, 82pt gives the best vertical presence (48% ink fill). For 24-hour
-mode the widest string is `04:00` (317 px at 82pt) so you'd need to drop
-to 74pt to keep 24-hour times within bounds.
+| Size | Ink height | V-fill | Widest 12h (squished) | Margin | Notes |
+| ---- | ---------: | -----: | --------------------: | -----: | ----- |
+| 82pt | 62px | 63% | 275px (`10:44`) | 21px | **Current** — comfortable headroom |
+| 84pt | 64px | 65% | 282px | 14px | Fits, but tiny gain |
+| 86pt | 65px | 66% | 288px | 8px | Marginal |
+| **88pt** | **67px** | **68%** | **290px** | **6px** | **Practical ceiling** — every 12h string fits |
+| 90pt | 68px | 69% | 302px | −6px | Overflows even on `10:44` |
+
+The widest 12-hour string is `10:44` (the digit '1' is narrow but '0' plus
+'4's width in the minute position maximises the string). `10:00` is typically
+a few pixels narrower at the squished xAdvance because the zeros are narrower
+than `4`.
+
+For 24-hour mode, the widest string is `04:00` (317px at 82pt, 345px at 88pt)
+so you'd need to drop to 74pt to keep 24-hour times within bounds.
+
+**Key insight:** the squish frees up to ~18px of horizontal headroom that the
+raw bbox width check doesn't see. Always run `font_tool.py scan` against the
+*actual squished* header when checking fit, or use `font_tool.py layout` to
+get the true rendered width at a given squish factor.
 
 ## Step 2: Generate the header
 
