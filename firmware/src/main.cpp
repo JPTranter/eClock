@@ -84,6 +84,13 @@ static volatile bool g_button_pending = false;
 static uint32_t g_awake_until = 0;
 static const uint8_t  SLEEP_START_HOUR = 23;    // 11pm
 static const uint8_t  SLEEP_END_HOUR   = 5;     // 5am
+// The night sleep window (23:00 -> 05:00) is always 6 hours of wall-clock
+// time. We sleep a FIXED duration rather than a epoch-derived target, so a
+// DST transition in the middle of the night cannot shift the wake-up hour.
+static const uint32_t NIGHT_SLEEP_S = 6 * 3600; // 23:00 -> 05:00
+
+// True once BLE.begin() has succeeded and BLE.address() is valid.
+static bool g_ble_initialized = false;
 
 // ==== Buttons ==================================================================
 // EN05 has three user buttons on D1, D2, D9: active LOW with INPUT_PULLUP.
@@ -247,8 +254,9 @@ static void drawClockFace() {
                 display.print(msg);
 
                 // MAC address at the bottom right (useful for HA config)
-                // BLE.address() queries the controller's BD_ADDR via HCI;
-                // HCI.localAddr is not populated on the Cordio stack.
+                // Only shown once BLE is initialised (avoids initial
+                // "00:00:00:00:00:00" flash on the pre-BLE draw).
+                if (g_ble_initialized) {
                 String macStr = BLE.address();
                 display.setFont(&FreeSans9pt7b);
                 int16_t macx, macy;
@@ -256,7 +264,8 @@ static void drawClockFace() {
                 display.getTextBounds(macStr.c_str(), 0, 0, &macx, &macy, &macw, &mach);
                 display.setCursor(display.width() - macw - 2,
                                   display.height() - 2 - 4);
-                display.print(macStr);
+                                    display.print(macStr);
+                                }
 
                 break;
             }
@@ -419,26 +428,23 @@ static void enterSleepMode() {
 
     // Power off the ePaper panel (D6 MOSFET gate LOW)
     digitalWrite(EPD_POWER, LOW);
+    // Block in WFE sleep for the full night (23:00 -> 05:00 = 6 h).
+    // Fixed duration, not epoch-derived, so a DST transition mid-sleep
+    // cannot shift the wake-up time. Re-sync with HA on wake.
+    bool woke_by_button = false;
 
-    // Calculate seconds until 5am local time
+    // Compute local seconds-of-day for the "stay awake until next 11pm"
+    // target (used only when a button press interrupts the night).
+    // The epoch may be stale during DST (off by 1 hour), but the error
+    // is bounded and the clock re-syncs immediately on button wake.
     int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
     if (local_sec < 0) local_sec += 86400;
-    uint32_t sec_to_5am = (SLEEP_END_HOUR * 3600 - local_sec + 86400) % 86400;
-
-    // Seconds until the next nightly shutdown (11pm). Used only when a button
-    // press wakes us: it becomes the "stay awake until" target so the clock
-    // skips the rest of this night but sleeps again at the next 11pm.
     uint32_t sec_to_shutdown =
         (SLEEP_START_HOUR * 3600 - local_sec + 86400) % 86400;
 
-    // Block in WFE sleep until a button press or wake-up time
-    uint32_t sleep_ms = (sec_to_5am > 0 && sec_to_5am <= 12 * 3600)
-                        ? sec_to_5am * 1000 : 0;
-    bool woke_by_button = false;
-    if (sleep_ms > 0) {
-        woke_by_button = g_button_sem.try_acquire_for(
-                            std::chrono::milliseconds(sleep_ms));
-    }
+    // Sleep for a fixed 6-hour window, immune to DST
+    woke_by_button = g_button_sem.try_acquire_for(
+                        std::chrono::milliseconds(NIGHT_SLEEP_S * 1000UL));
 
     // Re-power the ePaper panel
     pinMode(EPD_POWER, OUTPUT);
@@ -509,6 +515,8 @@ void setup() {
             delay(100);
         }
     }
+
+g_ble_initialized = true;
 
     // Redraw after BLE init so the MAC address is valid
     drawClockFace();
