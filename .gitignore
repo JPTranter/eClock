@@ -68,3 +68,13 @@ $RECYCLE.BIN/
 *.log
 /tmp/
 /scratch/
+
+# ---- Host test fixture ----
+# Build artifacts and generated PNGs are local-only; the fixture source (mocks,
+# harness, tests, CMake, vendored third-party) all live under firmware/test/ and
+# are committed.
+firmware/test/build/
+firmware/test/output/
+
+# ---- Agent workspace (not project content) ----
+.hermes/

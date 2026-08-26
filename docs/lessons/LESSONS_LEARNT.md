@@ -874,3 +874,107 @@ Three measurements collapse the 37–335 day range to a single number:
 1. Full-board idle current (WFE, panel powered)
 2. Average current during one partial refresh (880ms window)
 3. SSD1680 idle/standby current with the rail on
+
+---
+
+## 22. Host unit-testing the firmware without touching main.cpp (verified 2026-08-26)
+
+A native (x86) test harness now exists under `firmware/test/`. It compiles the
+**unmodified** `main.cpp` against mock headers and runs the state machine, time
+math, battery logic and display drawing on the host — 98% line coverage, with
+real PNG renders of the ePaper output. The key non-obvious lessons:
+
+### Reaching `static` state without editing core code
+
+`main.cpp` keeps 17 file-scoped `static` globals and many `static` functions.
+The trick is that each test `.cpp` does `#include "main.cpp"` (via
+`clock_harness.h`), making every static reachable in that translation unit.
+One test executable per test file keeps the statics isolated per binary (no ODR
+clashes, no cross-test interference). gcovr merges the per-binary `.gcda` data
+and, thanks to `#line` markers, attributes the lines back to `src/main.cpp`.
+
+### Host tests must define `ECLOCK_CORE_MBED` — the opposite of what you'd guess
+
+`main.cpp` lines 7–11 `#error` unless `ECLOCK_CORE_MBED` is defined. So host
+tests define the **mbed** branch and mock `mbed.h` + `ArduinoBLE.h` — not the
+Adafruit core, which looks "more portable" but isn't what compiles.
+
+### `ARDUINO=100` must be a compile flag, not a mock header
+
+`Adafruit_GFX.h` evaluates `#if ARDUINO >= 100` at the very top — *before* it
+includes `Arduino.h`. Defining `ARDUINO` inside `Arduino.h` is too late. It must
+be `-DARDUINO=100` on the compiler command line (CMake `add_compile_definitions`).
+
+### Adafruit_GFX.cpp needs more than a pgmspace stub
+
+On x86 the library defines its own `pgm_read_*` fallbacks (no `pgmspace.h`
+needed), but it still pulls in, via `Arduino.h`: the `radians()`/`degrees()`/
+`sq()` macros and `sin`/`cos` (`math.h`). It also includes
+`<Adafruit_I2CDevice.h>` and `<Adafruit_SPIDevice.h>` but never uses their
+types — empty stubs suffice. And `main.cpp` calls `display.print(F("…"))`, so
+the `Print` mock needs a `print(const __FlashStringHelper*)` overload.
+
+### GFXcanvas1 is a ready-made ePaper fake — reuse it, don't reimplement
+
+The fake `GxEPD2_BW` derives from Adafruit's own `GFXcanvas1`, which rasterizes
+the real `FontChango88.h`/FreeSans fonts and `material_icons.h` bitmaps
+byte-for-byte. Its bit order is MSB-first with **bit set = white**, which
+matches both Pillow `'1'`-mode and the SSD1680 (1 = white). So a PNG dump is a
+trivial bit-expansion to 255/0 grayscale — no masking inversion, no rotation.
+
+### The panel is 128×296 portrait; firmware draws 296×128 logical
+
+`GxEPD2_290_T94_V2` is `WIDTH=128, HEIGHT=296`, driven in landscape via
+`setRotation(1)`. The firmware's coordinates already assume the post-rotation
+296×128 space, so the fake canvas is `GFXcanvas1(296, 128)` with rotation left
+at 0 (no transform) — the fake's `setRotation()` is a no-op.
+
+### BLE `written()` has a trap: two `writeValue` overloads
+
+In the real ArduinoBLE, the public `writeValue(buf, len)` (used by `setup()` to
+initialise) does **not** set the written flag; only the remote-write path
+(`BLELocalCharacteristic::writeValue(device, …)`, what Home Assistant triggers
+over the air) sets it. A mock that sets the flag on any `writeValue` would make
+`setup()` trigger a phantom time-sync on the first `loop()`. The mock models the
+split: a `test_simulate_remote_write()` helper is the over-the-air path.
+
+### board_pins.h compiles register writes even when you don't call them
+
+`eclock_release_twim_pins()` (guarded by `ECLOCK_CORE_MBED && NRF_TWIM0`) writes
+`NRF_TWIM0/1->ENABLE` and `NRF_TWI0/1->ENABLE`, and `setup()` actually calls it.
+Defining `NRF_TWIM0` (as a real writable struct, not a dangling address) makes
+that branch compile *and run* on host. The nRF52 fakes are `static` structs, so
+the writes are safe no-ops.
+
+### Toolchain on this Windows box
+
+No `g++`/`gcc`/`make` was present (only MSVC Build Tools). MinGW-w64 was
+installed via `winget install BrechtSanders.WinLibs.POSIX.UCRT`, which ships
+`gcc`/`g++`/`gcov`. Coverage needs GCC (MSVC coverage is OpenCppCoverage, far
+more painful). `gcovr` is installed via `uv tool install gcovr`.
+
+### Coverage ceiling is 98%, not 100% — and that's correct
+
+The only uncovered lines are the `BLE.begin()`-failure infinite loop
+(`while(1)` blink, lines 512–515), which cannot be exercised without hanging
+the runner. Everything else — every state transition, both battery branches
+(USB bolt and percentage), the defensive `STATE_SLEEPING`/`STATE_NO_TIME` loop
+cases, the mid-minute partial tick, the DST-immune sleep — is covered.
+
+### Latent assumption worth knowing (not a bug to fix)
+
+`updateTimeStruct()` does `g_hour = (local_time/3600) % 24` where `local_time =
+g_epoch + g_tz_offset`. If `local_time` were negative, `%` returns a negative
+value that wraps into `uint8_t` (e.g. hour 251). This is unreachable in practice
+(any real epoch is ≫ any timezone offset) — document, don't "fix".
+
+### How to run
+
+```bash
+# toolchain on PATH (MinGW-w64), then:
+cmake -S firmware/test -B firmware/test/build -G Ninja
+cmake --build firmware/test/build
+ctest --test-dir firmware/test/build --output-on-failure
+cmake --build firmware/test/build --target coverage   # HTML in build/output/coverage/
+# PNG renders land in firmware/test/output/
+```
