@@ -978,3 +978,78 @@ ctest --test-dir firmware/test/build --output-on-failure
 cmake --build firmware/test/build --target coverage   # HTML in build/output/coverage/
 # PNG renders land in firmware/test/output/
 ```
+
+---
+
+## 23. The shipped firmware builds ONLY on the `mbed` core — and battery spacing (verified 2026-08-27)
+
+### The `adafruit` env no longer compiles — use `-e mbed`
+
+`main.cpp` opens with a hard guard:
+
+```cpp
+#if defined(ECLOCK_CORE_MBED)
+#include <ArduinoBLE.h>
+#else
+#error "Must compile with mbed core for ArduinoBLE!"
+#endif
+```
+
+So `pio run` (the default `adafruit` env) fails immediately with the `#error`, plus a
+cascade of `BLEService`/`BLECharacteristic`/`rtos::Semaphore` "does not name a type"
+errors. The `adafruit` env is now **dead** for the current firmware. **Always pass
+`-e mbed`**:
+
+```bash
+pio run -e mbed
+pio run -e mbed -t upload --upload-port <bootloader port>
+```
+
+This is worth pinning: `docs/SETUP.md` still leads with `-e adafruit`, and the host
+test harness sets `ECLOCK_CORE_MBED` for the same reason (see §22).
+
+### PlatformIO's `platforms.lock` is outside the workspace — a file-sandbox gotcha
+
+`pio run` fails with `PermissionError: [Errno 13] ... '.platformio\\platforms.lock'`
+when the invoking process cannot write to `~/.platformio/`. The platform/packages are
+already installed, but PlatformIO still tries to *acquire* the lock file on every
+build, so a non-writable home dir breaks even a no-op incremental build. Under a file
+sandbox this looks like a build error but isn't a code problem — grant the process
+write access to `~/.platformio` (and `~/.platformio/packages`) and it succeeds. If the
+build is later reported "mysteriously hung", the EPERM-on-piped-stdout quirk can make
+`cmake --build` return with empty output while the work actually completes — check the
+target binary's timestamp rather than trusting the pipe.
+
+### Firmware visual tweaks can be reviewed without flashing — use the PNG dump
+
+The host harness (`firmware/test/`) renders `drawClockFace()` to a real 296×128 PNG in
+`firmware/test/output/`. For a layout tweak, regenerate the render and inspect the PNG
+**before** uploading to hardware. The fixture compiles `main.cpp` directly, so a change
+takes effect the moment `test_display` is rebuilt:
+
+```bash
+cmake --build firmware/test/build --target test_display
+./firmware/test/build/test_display.exe    # writes firmware/test/output/*.png
+```
+
+### Battery indicator spacing (the change that prompted this lesson)
+
+The clock face draws `battery icon + percentage` right-aligned. Originally the gap
+between the icon and the `N%` text was a hardcoded **2 px** (`text_x = width - 2 -
+icon_battery_w - 2 - bw`) — visually the text touched the icon. The user found it too
+close; the fix widened the gap to **6 px**. Layout constants like this are cheap to
+tune and easy to eyeball via the PNG dump, so "nudge the icon/text apart" is a one-line
+main.cpp change plus a re-render — no firmware reflash needed to judge it.
+
+### Deploy-from-CLI recap (mbed core)
+
+```bash
+cd firmware
+pio run -e mbed                              # build the binary
+python tools/reset_to_bootloader.py          # 1200-baud touch -> bootloader (prints port)
+pio run -e mbed -t upload --upload-port COM6 # use the port it printed ("Device programmed.")
+```
+
+After upload the board re-enumerates as the application (PID `0x8045`) on a separate
+COM port — verify with `python -c "import serial.tools.list_ports as l; [print(p.device,
+hex(p.pid), p.description) for p in l.comports()]"`.

@@ -308,7 +308,8 @@ static void drawClockFace() {
                     int16_t bx, by;
                     uint16_t bw, bh;
                     display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
-                    int text_x = display.width() - 2 - icon_battery_w - 2 - bw;
+                    // 6px gap between the battery icon and the percentage
+                    int text_x = display.width() - 2 - icon_battery_w - 6 - bw;
                     int icon_x = display.width() - 2 - icon_battery_w;
                     display.drawBitmap(icon_x, 2,
                         icon_battery_bitmap, icon_battery_w, icon_battery_h, GxEPD_BLACK);

@@ -13,10 +13,12 @@ VS Code plus the PlatformIO IDE extension is optional; everything below is CLI.
 
 ## 2. Build
 
+Build the **mbed** core — the shipped firmware hard-requires it, so the `adafruit` env
+will not compile `main.cpp` (it `#error`s unless `ECLOCK_CORE_MBED` is defined):
+
 ```bash
 cd firmware
-pio run -e adafruit        # display-first path (default)
-pio run -e mbed            # BLE-first path
+pio run -e mbed            # the only env that builds the current firmware (default)
 ```
 
 The first build downloads the platform and toolchain (a few hundred MB) and takes a
@@ -26,7 +28,7 @@ The platform is pinned to `https://github.com/maxgerhardt/platform-nordicnrf52.g
 because the `xiaoble_adafruit` / `xiaoblesense_adafruit` board definitions live in that
 fork, not in the official PlatformIO `nordicnrf52` platform.
 
-Expected Phase 1 footprint: RAM 3.0% (7,148 B), Flash 5.5% (44,668 B).
+Current expected footprint (mbed core): RAM 31.5% (74,768 B), Flash 44.6% (361,316 B).
 
 ## 3. Identify the two USB identities
 
@@ -36,7 +38,7 @@ depending on what is running. Knowing which is which is essential:
 | State | VID:PID | Example port | Notes |
 | --- | --- | --- | --- |
 | Bootloader | `2886:0064` | COM6 | Accepts serial DFU uploads |
-| Application | `2886:8044` | COM11 | TinyUSB CDC from our firmware |
+| Application | `2886:8045` | COM10 | TinyUSB CDC from our firmware (mbed core) |
 
 List them at any time:
 
@@ -65,7 +67,7 @@ Two steps:
 ```bash
 cd firmware
 python tools/reset_to_bootloader.py                      # prints the bootloader port
-pio run -e adafruit -t upload --upload-port COM6         # use the port it printed
+pio run -e mbed -t upload --upload-port COM6             # use the port it printed
 ```
 
 `reset_to_bootloader.py` performs a 1200-baud open/close touch on the application
@@ -119,7 +121,7 @@ python tools/reset_to_bootloader.py
 # start the capture in one shell...
 python tools/capture_boot.py 12
 # ...and upload from another
-pio run -e adafruit -t upload --upload-port COM6
+pio run -e mbed -t upload --upload-port COM6
 ```
 
 ## Pitfalls hit during real setup
@@ -130,6 +132,6 @@ pio run -e adafruit -t upload --upload-port COM6
 | `undefined reference to 'Serial'`, `Adafruit_USBD_CDC::begin` | On the Adafruit core `Serial` is TinyUSB CDC, and PlatformIO's LDF will not link the bundled library implicitly | `#include <Adafruit_TinyUSB.h>` in the sketch |
 | No `XIAO-BOOT` drive after reset | Mass storage does not reliably remount | Use serial DFU (`-t upload`) |
 | Upload fails, port busy | A serial monitor is holding the port | Close the monitor first |
-| Serial monitor shows nothing | Attached to the bootloader port | Attach to the application port (PID `8044`) |
+| Serial monitor shows nothing | Attached to the bootloader port | Attach to the application port (PID `8045`) |
 | Banner missing, only ticks | Joined the stream after boot | Use `tools/capture_boot.py` |
 | LED state always identical in tick lines | Blink and report intervals were phase-locked | Blink at 400 ms against a 1000 ms report |

@@ -3,7 +3,7 @@
 Update this file at the end of each development session. It is the single place to
 look to answer "where is this project actually up to?"
 
-Last updated: 2026-08-25
+Last updated: 2026-08-27
 
 ## Current phase
 
@@ -13,7 +13,9 @@ MAC address now shown on sync screen for HA configuration. "No Time!" text
 clipping fixed. Stay-awake behaviour hardened (button press during sleep
 keeps clock on until next 11pm, not just 15 min). New board family verified
 (identical XIAO nRF52840 Plus + EN05, recognised by Seeed bootloader PID
-0x0064).
+0x0064). **A host test harness now compiles the unmodified `main.cpp` on the
+host (≥98% line coverage, real PNG renders) and a layout tweak (battery % gap
+2px → 6px) was made and reviewed via the PNG dump.**
 
 ## Honest state of play
 
@@ -21,7 +23,7 @@ keeps clock on until next 11pm, not just 15 min). New board family verified
 | --- | --- |
 | Project plan | Written and reviewed |
 | Hardware selected | Yes, in hand |
-| Toolchain | **Verified.** PlatformIO builds both core environments |
+| Toolchain | **Verified (mbed-only).** The shipped firmware requires the `mbed` core (`main.cpp` `#error`s without `ECLOCK_CORE_MBED`); the `adafruit` env does not build it. `default_envs = mbed`. |
 | Upload path | **Verified.** Serial DFU working on `mbed` core; reset script patched for `0x8045` PID |
 || Firmware | **Phase 6 in progress.** Font bumped 82→88pt (+6pt, 63%→68% vertical fill). MAC address shown on sync screen. "No Time!" text clipping fixed. Button sleep-wake changed to keep clock on until next 11pm. Builds clean: 360KB flash (44.5%), 74KB RAM (31.5%). |
 || Pinout / board traps | **Verified.** Second board confirmed identical (XIAO nRF52840 Plus + EN05, Seeed bootloader PID 0x0064). |
@@ -32,7 +34,8 @@ keeps clock on until next 11pm, not just 15 min). New board family verified
 || Font tooling | **Hardened.** `fix` command normalises yOffsets. Sprite auto-sizes cells for any font. |
 || Power budget | **Modelled but unmeasured.** `docs/research/power-budget-analysis.md` — the project's #1 risk now has a reproducible model. Ready for bench measurement. |
 || Enclosure | Notes only, no CAD |
-|| Build instructions | `docs/SETUP.md` written and verified |
+|| Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. |
+|| Build/test docs | `README.md` has full CLI build + test + flash steps; `docs/SETUP.md` written and verified |
 
 ## Immediate next steps
 
