@@ -7,8 +7,8 @@ from Home Assistant over Bluetooth Low Energy.
 
 Status: **Phase 6 — review & polish.** Firmware, BLE time sync (device + Home
 Assistant side), power-budget modelling and a 98%-coverage host test harness are all
-committed and working. See `docs/PROJECT_PLAN.md` for the phase plan and
-`docs/STATUS.md` for where things actually stand today.
+committed and working. See [the project plan](docs/PROJECT_PLAN.md) and
+[where things actually stand today](docs/STATUS.md).
 
 > **Using one?** Read the [User Guide](docs/USER_GUIDE.md) — what the screen says, what
 > every icon means, and how to use the buttons. If this is a stock clock you've been
@@ -32,6 +32,30 @@ Assistant time sync, and the running clock face once it has time.
 - Reproducible by someone else from the documentation in this repo.
 - Fully open source: firmware, enclosure, and build instructions.
 
+## Documentation
+
+- [User Guide](docs/USER_GUIDE.md) — what the screen says, what every icon means, and how
+  to use the buttons (for anyone *using* a clock).
+- [Build & setup](docs/SETUP.md) — verified install, build, flash and monitor steps for
+  a developer machine.
+- [Project plan](docs/PROJECT_PLAN.md) — the phased development plan and success criteria.
+- [Status](docs/STATUS.md) — where the project actually stands today.
+- [Hardware pinout](docs/hardware/PINOUT.md) — pin mappings, power control, and board
+  traps (read this before wiring or writing display code).
+- [Lessons learned](docs/lessons/LESSONS_LEARNT.md) — accumulated hard-won findings from
+  each development session.
+- [Power budget](docs/research/power-budget-analysis.md) — the six-term energy model and
+  the battery-life estimate.
+- [Research tracking](docs/research/RESEARCH_TRACKING.md) — open questions, their answers,
+  and what still needs proving.
+- [Font generation](docs/reference/FONT_GENERATION.md) — how the custom time font and
+  icons were generated.
+- [Test checklists](docs/testing/PHASE1_CHECKLIST.md) — the Phase 1/2 display test
+  checklists (`docs/testing/`).
+- [Enclosure notes](docs/enclosure/DESIGN_NOTES.md) — enclosure design considerations.
+- [Home Assistant integration](integrations/homeassistant/README.md) — the BLE time-sync
+  custom component.
+
 ## Hardware
 
 | Part | Detail |
@@ -44,8 +68,8 @@ Assistant time sync, and the running clock face once it has time.
 | Enclosure | 3D printed, designed in OnShape |
 
 Pinout, power-rail gotchas, and board-specific traps are documented in
-`docs/hardware/PINOUT.md`. Read that before wiring or writing display code — the
-EN05 does not talk to the panel over the visible header pins.
+[the hardware pinout](docs/hardware/PINOUT.md). Read that before wiring or writing
+display code — the EN05 does not talk to the panel over the visible header pins.
 
 ## Repository layout
 
@@ -74,8 +98,9 @@ integrations/homeassistant/  Home Assistant custom component for BLE time sync
 
 Note on vendor documentation: the Seeed and Good Display datasheets, schematic and PCB
 archives are proprietary and are **not** included in this repository. See
-`docs/hardware/datasheets/README.md` for what to download and where. Everything this
-project learned from them is written up in plain terms in `docs/hardware/PINOUT.md`.
+[the datasheets README](docs/hardware/datasheets/README.md) for what to download and
+where. Everything this project learned from them is written up in plain terms in
+[the hardware pinout](docs/hardware/PINOUT.md).
 
 ## Home Assistant time sync
 
@@ -152,8 +177,9 @@ A successful upload ends with `Device programmed.`, and the board re-enumerates 
 running application on its application COM port. If the helper can't find the board,
 **double-tap the RESET button** to force the bootloader manually.
 
-See `docs/SETUP.md` for the full setup guide, `docs/hardware/PINOUT.md` before wiring
-anything, and `docs/STATUS.md` for where the project stands today.
+See [the full setup guide](docs/SETUP.md), [the hardware pinout](docs/hardware/PINOUT.md)
+before wiring anything, and [the status](docs/STATUS.md) for where the project stands
+today. All the docs are linked from [Documentation](#documentation) above.
 
 ## License
 
