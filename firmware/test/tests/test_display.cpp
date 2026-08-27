@@ -95,3 +95,25 @@ TEST(Display, UsbRunningFaceRendersBoltIcon) {
     ClockFixture::runDrawClockFace();
     EXPECT_TRUE(ClockFixture::dumpPng("output/running_usb.png"));
 }
+
+// Low battery (<=20%): the running face swaps the battery icon for the empty
+// battery glyph.
+TEST(Display, LowBatteryRunningFaceSwapsIcon) {
+    ClockFixture::reset();
+    nrf_power_instance.USBREGSTATUS = 0;
+    ClockFixture::setEpoch(1693000000, 36000);
+    g_state = STATE_RUNNING;
+    // ~20%: vbat ~3.48V across the 3.3V..4.2V mapping.
+    test_set_analog_u16((uint32_t)((3.48f / 7.2f) * 4096.0f) << 4);
+    EXPECT_LE(ClockFixture::runGetBatteryPercent(), LOW_BATTERY_PCT);
+    ClockFixture::runDrawClockFace();
+    EXPECT_TRUE(ClockFixture::dumpPng("output/running_low_battery.png"));
+}
+
+// The final low-battery screen is a real render (persists when power is lost).
+TEST(Display, LowBatteryScreenRendersAndDumps) {
+    ClockFixture::reset();
+    g_low_battery_lock = true;
+    ClockFixture::runDrawLowBatteryScreen();
+    EXPECT_TRUE(ClockFixture::dumpPng("output/low_battery.png"));
+}

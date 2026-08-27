@@ -57,3 +57,33 @@ TEST(Battery, MidVoltageYieldsPositivePercent) {
     EXPECT_LT(pct, 100);
     EXPECT_NEAR(pct, 50, 2);
 }
+
+// At or below the critical threshold, the loop draws the low-battery screen and
+// sets the lock so the normal clock face is never redrawn over it.
+TEST(Battery, CriticallyLowSetsLockAndDrawsLowBatteryScreen) {
+    ClockFixture::reset();
+    nrf_power_instance.USBREGSTATUS = 0;
+    ClockFixture::setEpoch(1693000000, 36000);
+    g_state = STATE_RUNNING;
+
+    // Critical: 5% -> vbat ~3.345V.
+    test_set_analog_u16((uint32_t)((3.345f / 7.2f) * 4096.0f) << 4);
+    ASSERT_LE(ClockFixture::runGetBatteryPercent(), CRITICAL_BATTERY_PCT);
+
+    ClockFixture::runLoop();
+    EXPECT_TRUE(ClockFixture::lowBatteryLock());
+    EXPECT_FALSE(g_needs_display_update);
+}
+
+// Above the critical threshold, a normal run does NOT engage the lock.
+TEST(Battery, AboveCriticalDoesNotLock) {
+    ClockFixture::reset();
+    nrf_power_instance.USBREGSTATUS = 0;
+    ClockFixture::setEpoch(1693000000, 36000);
+    g_state = STATE_RUNNING;
+    // 50%: vbat ~3.75V.
+    test_set_analog_u16(2133 << 4);
+    ASSERT_GT(ClockFixture::runGetBatteryPercent(), CRITICAL_BATTERY_PCT);
+    ClockFixture::runLoop();
+    EXPECT_FALSE(ClockFixture::lowBatteryLock());
+}

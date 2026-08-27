@@ -49,6 +49,7 @@ public:
         g_last_button_press = 0;
         g_awake_until = 0;
         g_ble_initialized = false;
+        g_low_battery_lock = false;
         g_button_pending = false;
         // Drain the button semaphore to count 0.
         while (g_button_sem.try_acquire()) {}
@@ -83,6 +84,7 @@ public:
     static bool bleInitialized() { return g_ble_initialized; }
     static bool lastSyncFailed() { return g_last_sync_failed; }
     static uint32_t awakeUntil() { return g_awake_until; }
+    static bool lowBatteryLock() { return g_low_battery_lock; }
 
     // ---- time helpers ----
     // Set the clock's notion of "now" (epoch + tz), updating the time struct
@@ -115,6 +117,7 @@ public:
     static void runLoop() { loop(); }
     static void runDrawClockFace() { drawClockFace(); }
     static void runDrawSleepIcon() { drawSleepIcon(); }
+    static void runDrawLowBatteryScreen() { drawLowBatteryScreen(); }
     static void runEnterSleepMode() { enterSleepMode(); }
     static int runGetBatteryPercent() { return getBatteryPercent(); }
 

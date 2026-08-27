@@ -14,6 +14,7 @@
 #include "material_icons.h"
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
+#include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
 #include "FontChango88.h"  // 88pt Chango for time digits (0-9, :)
 
@@ -88,6 +89,20 @@ static const uint8_t  SLEEP_END_HOUR   = 5;     // 5am
 // time. We sleep a FIXED duration rather than a epoch-derived target, so a
 // DST transition in the middle of the night cannot shift the wake-up hour.
 static const uint32_t NIGHT_SLEEP_S = 6 * 3600; // 23:00 -> 05:00
+
+// Battery thresholds. The percentage maps 3.3V (0%) to 4.2V (100%) — see
+// getBatteryPercent(). Below LOW_BATTERY_PCT the clock shows the empty-battery
+// icon plus a "Charge!" prompt. At or below CRITICAL_BATTERY_PCT the clock is
+// about to die, so it replaces the clock face with an unambiguous low-battery
+// screen: that last image persists on the ePaper panel even after total power
+// loss, so a dead clock can never be mistaken for a live-but-frozen time.
+static const int8_t  LOW_BATTERY_PCT     = 20;
+static const int8_t  CRITICAL_BATTERY_PCT = 5;
+
+// Set true once the clock has drawn the final low-battery screen. It stops the
+// loop from redrawing the normal clock face over that message, so the last
+// image on the panel is always the unambiguous low-battery warning.
+static bool g_low_battery_lock = false;
 
 // True once BLE.begin() has succeeded and BLE.address() is valid.
 static bool g_ble_initialized = false;
@@ -301,7 +316,15 @@ static void drawClockFace() {
                     display.drawBitmap(display.width() - 2 - icon_bolt_w, 2,
                         icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, GxEPD_BLACK);
                 } else {
-                    // Battery: battery icon + percentage
+                    // Battery icon + percentage. Below the low threshold the
+                    // icon swaps to the empty-battery glyph so the low state is
+                    // obvious at a glance even before the final warning screen.
+                    const uint8_t* bmp = (batPct <= LOW_BATTERY_PCT)
+                        ? icon_battery_empty_bitmap : icon_battery_bitmap;
+                    uint8_t icon_w = (batPct <= LOW_BATTERY_PCT)
+                        ? icon_battery_empty_w : icon_battery_w;
+                    uint8_t icon_h = (batPct <= LOW_BATTERY_PCT)
+                        ? icon_battery_empty_h : icon_battery_h;
                     char pctBuf[8];
                     snprintf(pctBuf, sizeof(pctBuf), "%d%%", batPct);
                     display.setFont(&FreeSans9pt7b);
@@ -309,10 +332,9 @@ static void drawClockFace() {
                     uint16_t bw, bh;
                     display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
                     // 6px gap between the battery icon and the percentage
-                    int text_x = display.width() - 2 - icon_battery_w - 6 - bw;
-                    int icon_x = display.width() - 2 - icon_battery_w;
-                    display.drawBitmap(icon_x, 2,
-                        icon_battery_bitmap, icon_battery_w, icon_battery_h, GxEPD_BLACK);
+                    int text_x = display.width() - 2 - icon_w - 6 - bw;
+                    int icon_x = display.width() - 2 - icon_w;
+                    display.drawBitmap(icon_x, 2, bmp, icon_w, icon_h, GxEPD_BLACK);
                     display.setCursor(text_x, 12);
                     display.print(pctBuf);
                 }
@@ -415,6 +437,45 @@ static void drawSleepIcon() {
         display.getTextBounds(sub, 0, 0, &sx, &sy, &sw, &sh);
         display.setCursor((display.width() - sw) / 2 - sx,
                           (display.height() + mh) / 2 + 14);
+        display.print(sub);
+    } while (display.nextPage());
+}
+
+// Final low-battery screen. Drawn once when the cell is critical so the last
+// image left on the ePaper panel is an unambiguous "battery empty, charge me"
+// message rather than a plausible time a user might trust. Because the panel
+// holds its image with no power, this message survives total power loss — a
+// dead clock can never be mistaken for a live-but-stopped one.
+static void drawLowBatteryScreen() {
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+
+        // Empty-battery icon, centred near the top
+        int icon_x = (display.width() - icon_battery_empty_w) / 2;
+        display.drawBitmap(icon_x, 16, icon_battery_empty_bitmap,
+            icon_battery_empty_w, icon_battery_empty_h, GxEPD_BLACK);
+
+        // "LOW BATTERY" — prominent, centred (18pt so it fits the panel width)
+        display.setFont(&FreeSansBold18pt7b);
+        const char* title = "LOW BATTERY";
+        int16_t tx, ty;
+        uint16_t tw, th;
+        display.getTextBounds(title, 0, 0, &tx, &ty, &tw, &th);
+        display.setCursor((display.width() - tw) / 2 - tx,
+                          (display.height() + th) / 2 - 8);
+        display.print(title);
+
+        // Instruction line
+        display.setFont(&FreeSans9pt7b);
+        const char* sub = "Charge me now";
+        int16_t sx, sy;
+        uint16_t sw, sh;
+        display.getTextBounds(sub, 0, 0, &sx, &sy, &sw, &sh);
+        display.setCursor((display.width() - sw) / 2 - sx,
+                          display.height() - 2 - 5);
         display.print(sub);
     } while (display.nextPage());
 }
@@ -616,6 +677,19 @@ void loop() {
         }
 
         case STATE_RUNNING: {
+            // Critically low battery: draw the final low-battery screen once,
+            // stop the radio, and set the lock so nothing redraws over it. The
+            // panel keeps that message even after the cell dies, so a dead clock
+            // never shows a stale, trusting time. A recharge reboots the board
+            // fresh into STATE_SYNCING (setup() always starts a clean sync).
+            if (!g_low_battery_lock && getBatteryPercent() <= CRITICAL_BATTERY_PCT) {
+                g_low_battery_lock = true;
+                BLE.stopAdvertise();
+                drawLowBatteryScreen();
+                g_needs_display_update = false;
+                break;
+            }
+
             // Check if it's time to enter sleep mode (11pm-5am)
             int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
             if (local_sec < 0) local_sec += 86400;
@@ -677,7 +751,9 @@ void loop() {
     // ---------------------------------------------------------------
     // 5. Refresh the ePaper display
     // ---------------------------------------------------------------
-    if (g_needs_display_update) {
+    // Once the low-battery lock is set, never redraw — the last image on the
+    // panel must stay the unambiguous low-battery warning.
+    if (g_needs_display_update && !g_low_battery_lock) {
         drawClockFace();
         g_needs_display_update = false;
     }

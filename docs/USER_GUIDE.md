@@ -69,9 +69,13 @@ described as you actually see them on the panel.
 | --- | --- |
 | **A battery icon with a number, e.g. `85%`** | Running on battery. The number is roughly how much charge is left. |
 | **A lightning-bolt icon** | Plugged into USB / charger. It's charging — no percentage shown because it's running off the wire, not the cell. |
+| **An *empty* battery icon (no fill) with a low number** | Battery running low — **charge it soon** (see "Charging" below). |
 
-When the battery gets genuinely low the clock shows it in the percentage — charge it
-soon. Because the panel barely uses power, a full charge lasts months.
+![Running on a low battery](screenshots/running_low_battery.png)
+
+Because the panel barely uses power, a full charge lasts months — you'll rarely think
+about the battery. But the clock gives you two clear heads-ups before it runs out
+(see **Charging** below), so you're never caught off guard.
 
 ### Sync status (bottom left)
 
@@ -83,6 +87,39 @@ Next to the icon is a small two-digit time (e.g. `09:41`) — that's the time of
 | **A white circle with a tick / check mark** | Sync is good. The clock has the correct, up-to-date time. This is the normal "happy" state — you'll see this almost all the time. |
 | **A pair of circular arrows** | The clock is syncing right now — it's talking to Home Assistant for the correct time. |
 | **A circle with an X / cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry on its own. |
+
+---
+
+## Charging
+
+The clock runs for months on its little battery, so charging is a rare chore. But
+because the screen is *ePaper*, it can keep showing an image even when the clock has
+run out of power — which is why the clock warns you clearly **before** that happens,
+so you never end up trusting a frozen time.
+
+### The two heads-ups
+
+**1. Low-battery icon (a few weeks left).** When the battery drops to about 20%, the
+battery icon at the top right goes from a full battery to an **empty battery**, and
+the number drops. That's your cue to plug it in sometime in the next week or two.
+
+**2. The final "LOW BATTERY" screen (about the last bit of juice).** If the battery
+gets down to the last few percent, the clock replaces the clock face entirely with
+this:
+
+![The final low-battery screen](screenshots/low_battery.png)
+
+The moment you see this, **it's time to charge now.** Because this message is drawn
+onto the ePaper panel and the panel holds its image without power, it stays right
+there even if the clock then runs completely flat — so a dead clock clearly reads
+"charge me," never a time that might be wrong.
+
+### How to charge
+
+Plug a standard USB-C cable into the port on the clock. The screen switches to a
+lightning-bolt icon while it's charging. A fresh charge lasts months, so leave it
+plugged in for an hour or two and you're set — the clock re-syncs itself the moment
+it's back on power.
 
 ---
 
@@ -135,11 +172,14 @@ ahead or drift, it just waits patiently.
 ## Caring for the display
 
 - **The screen keeps its image without power** — that's what makes it so frugal. You
-  can pull the battery and the last time stays put.
+  can pull the battery and the last thing it showed stays put. That's also why the
+  low-battery screens are so important: unless the clock draws a clear "charge me"
+  message first, a dead clock could otherwise look like a live one that just stopped.
+  See **Charging** for the two warnings it gives you.
 - **Avoid pressing hard on the panel.** It's a glass display; a gentle touch is all it
   needs.
-- **Charge it with a standard USB cable.** You'll rarely need to, but the port is
-  handy when you do.
+- **Charge it with a standard USB cable** — the clock handles the rest and re-syncs
+  itself when power returns.
 
 ---
 
@@ -149,6 +189,8 @@ ahead or drift, it just waits patiently.
 | --- | --- | --- |
 | Shows "No Time!" | Home Assistant hasn't sent a time yet | Press any button to retry; check HA pairing. |
 | Cross icon (sync failed) | It couldn't reach HA for an update | Make sure HA is on and within Bluetooth range; it retries automatically. |
+| Empty-battery icon + low % | Battery is low | Charge the clock (see **Charging**). |
+| "LOW BATTERY" screen | Battery is nearly dead | **Charge now** — this screen stays until you do. |
 | Bolt icon, no % | It's plugged in / charging | That's normal — it's on the charger. |
 | "Zzz" at night | It's sleeping | Normal — it wakes itself at 5am (or on a button press). |
 
