@@ -9,7 +9,7 @@ The top-right user button on the EN05 shield (BUTTON_3) is physically wired to t
 When `SPI.begin()` initializes the MISO pin, it configures the GPIO pad as an input but *removes* any previously applied internal pull-up resistors. Because the button relies on an active-low `INPUT_PULLUP` configuration, the pin was left floating. This floating state caused environmental noise to trigger the `FALLING` edge interrupt millions of times per second. The resulting interrupt storm starved the main loop of CPU time, causing the clock to completely freeze at the "Syncing..." screen without ever triggering the 30-second timeout.
 
 **Solution:**
-We initially attempted to completely detach the interrupt and power down the SPI peripheral (`SPI.end()`) when the clock was idle, but this caused severe Mbed OS crashes (`hard faults`) when manipulating the interrupt allocation table. 
+We initially attempted to completely detach the interrupt and power down the SPI peripheral (`SPI.end()`) when the clock was idle, but this caused severe Mbed OS crashes (`hard faults`) when manipulating the interrupt allocation table.
 The cleaner, more elegant solution was to realize that the SPI peripheral *does not care* if its MISO input pin has a pull-up resistor. By simply calling `pinMode(BUTTON_3, INPUT_PULLUP)` *after* `display.init()` is called, we force the pull-up resistor back onto the pin. The pin stops floating, the interrupt storm ceases, and the button works perfectly because pressing it cleanly pulls the MISO line to GND.
 
 ## Lesson 2: Adafruit_GFX Text Wrapping on Custom Fonts

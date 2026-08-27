@@ -1,0 +1,65 @@
+name: Release
+
+# Builds the firmware when a release is published (or a v* tag is pushed) and
+# attaches a versioned .hex so it can be downloaded and flashed directly to the
+# device with serial DFU (the reliable path documented in docs/SETUP.md).
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+
+permissions:
+  contents: write            # needed to upload the release asset
+  actions: read
+
+jobs:
+  firmware:
+    name: Build firmware artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO Core
+        run: pip install platformio==6.1.19
+      - name: Build mbed firmware
+        run: pio run -e mbed
+        working-directory: firmware
+
+      - name: Collect version
+        id: ver
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Copy artifact to a versioned name
+        run: |
+          mkdir -p release
+          cp firmware/.pio/build/mbed/firmware.hex "release/eClock-${TAG}.hex"
+          cp firmware/.pio/build/mbed/firmware.elf "release/eClock-${TAG}.elf"
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+
+      - name: Attach to release (or create one)
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.ver.outputs.tag }}
+          files: release/*
+          generate_release_notes: true
+          body: |
+            ## eClock firmware ${{ steps.ver.outputs.tag }}
+
+            Build of the device-side firmware for the XIAO BLE nRF52840 + EN05 ePaper clock.
+
+            - **`eClock-<tag>.hex`** — what you flash (Intel HEX, serial DFU).
+            - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
+
+            ### Flash it (serial DFU — the reliable path)
+            1. Put the board into its bootloader (double-tap RESET, or run
+               `python tools/reset_to_bootloader.py`).
+            2. Upload with PlatformIO using the bootloader port:
+               ```
+               pio run -e mbed -t upload --upload-port <bootloader-port>
+               ```
+            3. See `docs/SETUP.md` for the full build / flash / monitor flow.

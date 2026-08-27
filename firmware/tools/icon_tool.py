@@ -172,14 +172,14 @@ def format_c_array(name, bytes_data, w, h):
 def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
     """Render icons as a sprite sheet PNG for visual review."""
     font = ImageFont.truetype(ttf_path, pt_size)
-    
+
     if not output_path:
         # Default to project root (firmware/tools/ → firmware/ → project_root)
         script_dir = os.path.dirname(os.path.abspath(__file__))    # firmware/tools/
         project_root = os.path.dirname(os.path.dirname(script_dir))  # project root
         font_name = os.path.splitext(os.path.basename(ttf_path))[0]
         output_path = os.path.join(project_root, f'sprite_{font_name}_{pt_size}pt.png')
-    
+
     # Render each icon to get dimensions
     rendered = []
     max_label_w = 0
@@ -193,11 +193,11 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
         label = f'U+{cp:04X}  {name}  [{w}x{h}]'
         rendered.append((name, cp, w, h, label))
         max_label_w = max(max_label_w, len(label))
-    
+
     if not rendered:
         print("ERROR: no icons rendered")
         sys.exit(1)
-    
+
     # Auto-size based on actual glyph dimensions
     max_ink_w = max(r[2] for r in rendered)
     max_ink_h = max(r[3] for r in rendered)
@@ -207,10 +207,10 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
     icon_area_w = max_ink_w + cell_pad * 2 + 4  # +4 for border
     cell_w = label_w + icon_area_w
     sheet_h = cell_h * len(rendered)
-    
+
     sheet = Image.new('RGB', (cell_w, sheet_h), (255, 255, 255))
     draw = ImageDraw.Draw(sheet)
-    
+
     for i, (name, cp, w, h, label) in enumerate(rendered):
         y = i * cell_h
         # Render icon (black on white = ePaper colour scheme)
@@ -222,13 +222,13 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
         mask = Image.eval(icon_img.convert('L'), lambda x: 255 - x)
         icon_rgb = Image.new('RGB', (w, h), (255, 255, 255))  # white bg
         icon_rgb.paste((0, 0, 0), mask=mask)  # black fg
-        
+
         # Centre glyph horizontally within the widest glyph's space,
         # and vertically within the cell
         x_offset = cell_pad + 2 + (max_ink_w - w) // 2
         y_offset = (cell_h - h) // 2
         sheet.paste(icon_rgb, (x_offset, y + y_offset))
-        
+
         # Black border around the icon cell (sized for the widest glyph)
         border_x = cell_pad + 1
         border_y = y + y_offset - 1
@@ -236,9 +236,9 @@ def cmd_sprite(ttf_path, pt_size, icons_dict, output_path=None):
         border_h = h + 2
         draw.rectangle([border_x, border_y, border_x + border_w, border_y + border_h],
                        outline=(0, 0, 0))
-        
+
         draw.text((icon_area_w + 4, y + 3), label, fill=0)
-    
+
     sheet.save(output_path)
     print(f"Sprite sheet saved: {output_path}")
     print(f"  Icons: {len(rendered)}")

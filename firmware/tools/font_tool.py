@@ -40,7 +40,7 @@ GAP_CENTER = DATE_TOP + AVAILABLE // 2  # 65 px centre of the gap
 
 def get_metrics(font, chars="0123456789:"):
     """Return (ink_h, yOff, widths, colon_w) for the given chars.
-    
+
     yOff is the Adafruit GFX yOffset = -(glyph bottom edge == bbox[3]).
     This matches what gfxfont_gen.py writes to the GFXglyph table.
     """
@@ -92,7 +92,7 @@ def time_width(widths, colon_w, hour, minute, is24h):
         else:
             # minute: two digits with leading zero
             m_str = f"{minute:02d}"
-    
+
     m_str = f"{minute:02d}"
     w = sum(widths.get(c, 0) for c in h_str) + colon_w + \
         sum(widths.get(c, 0) for c in m_str)
@@ -491,7 +491,7 @@ def cmd_layout(ttf_path, pt_size, is12h=True):
 
 def cmd_fix(header_path):
     """Normalize yOffset in an existing GFXfont header.
-    
+
     Sets all digit yOffsets to the mode value, then adjusts the colon's
     yOffset so its visual midpoint aligns with the digits' midpoint.
     Overwrites the file in place."""

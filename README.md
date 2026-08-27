@@ -206,6 +206,11 @@ jobs:
   (`ctest`), then generates a `main.cpp` coverage report and uploads it as a CI
   artifact for 14 days.
 
+A separate [`.github/workflows/release.yml`](.github/workflows/release.yml) runs when a
+release is published (or a `v*` tag is pushed): it builds the mbed firmware and attaches
+a versioned `.hex` (the serial-DFU flash artifact) and `.elf` (for debugging) to the
+release, so the firmware can be downloaded and flashed straight to a device.
+
 Locally, a [`.pre-commit-config.yaml`](.pre-commit-config.yaml) runs the same gitleaks
 secret scan (plus trailing-whitespace, end-of-file, YAML, large-file, private-key and
 merge-conflict checks) on every staged commit. Install once with

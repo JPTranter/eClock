@@ -7,7 +7,7 @@
 
 #define ANALOG_CONFIG
 
-/* Analog reference options 
+/* Analog reference options
  * Different possibilities available combining Reference and Gain
  */
 enum _AnalogReferenceMode
@@ -21,12 +21,12 @@ enum _AnalogReferenceMode
 /* Analog acquisition time options */
 enum _AnalogAcquisitionTime
 {
-  AT_3_US,         
-  AT_5_US,    
+  AT_3_US,
+  AT_5_US,
   AT_10_US, // Default value
   AT_15_US,
-  AT_20_US,  
-  AT_40_US  
+  AT_20_US,
+  AT_40_US
 };
 
 // Frequency of the board main oscillator
@@ -106,7 +106,7 @@ static const uint8_t A5  = PIN_A5;
 //Needed for SD library
 #define SDCARD_SPI    SPI
 #define SDCARD_SS_PIN   PIN_SPI_SS
- 
+
 // SPI
 #define PIN_SPI_MISO  (9u)
 #define PIN_SPI_MOSI  (10u)

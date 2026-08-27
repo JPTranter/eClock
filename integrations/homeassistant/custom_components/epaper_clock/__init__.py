@@ -34,7 +34,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         mac_addresses.append(domain_config["mac_address"])
     if "mac_addresses" in domain_config:
         mac_addresses.extend(domain_config["mac_addresses"])
-        
+
     mac_addresses = [mac.upper() for mac in mac_addresses]
 
     # Dictionary to keep track of cooldowns per MAC address
@@ -44,12 +44,12 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         address_upper = address.upper()
         current_time = time.time()
         last_sync = last_sync_timestamps.get(address_upper, 0.0)
-        
+
         # 15-second cooldown window to prevent concurrent/redundant sync attempts
         if current_time - last_sync < 15.0:
             _LOGGER.debug("Skipping auto-sync for %s (cooldown active)", address)
             return
-            
+
         last_sync_timestamps[address_upper] = current_time
         _LOGGER.info("Attempting connection to ePaper Clock at %s...", address)
         try:
@@ -59,21 +59,21 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 # Fetch local time coordinates
                 epoch = int(time.time())
                 tz_offset = int(datetime.now().astimezone().utcoffset().total_seconds())
-                
+
                 # Pack coordinates: 4-byte little-endian epoch, 4-byte little-endian timezone offset
                 payload = struct.pack("<ii", epoch, tz_offset)
-                
+
                 _LOGGER.info("Connected! Writing time sync: Epoch=%s, Offset=%s seconds", epoch, tz_offset)
-                
+
                 # Force Bleak to clear its GATT cache. This is necessary because Home Assistant
-                # heavily caches BLE profiles by MAC address. If the board was flashed with a 
+                # heavily caches BLE profiles by MAC address. If the board was flashed with a
                 # previous firmware, HA won't discover the new 0x2A2B characteristic without this.
                 if hasattr(client, "clear_cache"):
                     await client.clear_cache()
-                
+
                 await client.write_gatt_char(CURRENT_TIME_CHAR_UUID, payload, response=True)
                 _LOGGER.info("Time successfully synchronized with ePaper Clock %s!", address)
-                
+
         except Exception as err:
             # If we match blindly by UUID, we might connect to another device (e.g. smartwatch).
             # Ignore the 'was not found' error silently in that case so we don't spam logs.
@@ -87,17 +87,17 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def async_sync_time(call: ServiceCall):
         """Sync time with the ePaper clock (manual service trigger)."""
         address = call.data.get("address")
-        
+
         # If no specific address was requested, try to discover based on config
         targets = [address] if address else mac_addresses
-        
+
         if targets:
             for target_mac in targets:
                 ble_device = async_ble_device_from_address(hass, target_mac.upper(), connectable=True)
                 if not ble_device:
                     _LOGGER.error("Could not find ePaper Clock with address: %s", target_mac)
                     continue
-                
+
                 # Explicit service calls bypass the cooldown check
                 old_sync_ts = last_sync_timestamps.get(target_mac.upper(), 0.0)
                 last_sync_timestamps[target_mac.upper()] = 0.0
@@ -120,7 +120,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                     address = service_info.address
                     _LOGGER.info("Discovered ePaper Clock: %s [%s]", service_info.name, address)
                     break
-        
+
         if not ble_device:
             _LOGGER.error("Could not discover ePaper Clock BLE advertisement. Press a button on the clock to start advertising.")
             return
@@ -165,7 +165,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     # Store the cancel callbacks for clean reload/unloading if supported
     hass.data.setdefault(DOMAIN, {})
     cancel_callbacks = []
-    
+
     # Register the callback in Home Assistant to monitor advertisements
     if mac_addresses:
         for mac in mac_addresses:
@@ -182,7 +182,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         )
         cb = async_register_callback(hass, handle_ble_advertisement, matcher, BluetoothScanningMode.ACTIVE)
         cancel_callbacks.append(cb)
-    
+
     hass.data[DOMAIN]["cancel_callbacks"] = cancel_callbacks
 
     return True

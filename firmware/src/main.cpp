@@ -163,7 +163,7 @@ static void startSyncAttempt() {
     BLE.setLocalName("ePaper Clock");
     BLE.setDeviceName("ePaper Clock");
     BLE.setAdvertisedService(timeService);
-    
+
     // Add a changing manufacturer data byte so Home Assistant doesn't deduplicate
     // the advertisement if we restart advertising within its cache window.
     static uint8_t adv_counter = 0;
@@ -174,7 +174,7 @@ static void startSyncAttempt() {
     mfg_data[1] = 0xFF;
     mfg_data[2] = adv_counter;
     BLE.setManufacturerData(mfg_data, sizeof(mfg_data));
-    
+
     BLE.advertise();
     g_sync_attempt_start = millis();
 }
@@ -188,12 +188,12 @@ static int getBatteryPercent() {
     if (NRF_POWER->USBREGSTATUS & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
         return -1;  // caller renders "USB"
     }
-    
+
     // Enable battery divider
     pinMode(14, OUTPUT);
     digitalWrite(14, LOW);
     delay(10); // stabilize
-    
+
     // analogRead(32) crashes in Seeed's mbed core due to an out-of-bounds array access.
     // Instead, we directly instantiate an mbed AnalogIn on P0_31.
     int raw = 0;
@@ -201,23 +201,23 @@ static int getBatteryPercent() {
         mbed::AnalogIn vbat_adc(P0_31);
         raw = vbat_adc.read_u16() >> 4; // 16-bit down to 12-bit
     }
-    
+
     // Disable divider
     digitalWrite(14, HIGH);
-    
+
     // Let the mbed core properly destroy the AnalogIn object and recreate the DigitalOut
     // object so GxEPD2's digitalWrite(32) works again. This avoids crashing the mbed OS
     // by manually clobbering the SAADC hardware registers beneath it!
     pinMode(32, OUTPUT);
-    
+
     // Calculate battery percentage (assuming 12-bit, Vref=3.6V, 1/2 divider)
     float vbat = (raw * 7.2f) / 4096.0f;
-    
+
     // Map 3.3V (empty) to 4.2V (full)
     int pct = (int)((vbat - 3.3f) / (4.2f - 3.3f) * 100.0f);
     if (pct < 0) pct = 0;
     if (pct > 100) pct = 100;
-    
+
     return pct;
 }
 
@@ -324,7 +324,7 @@ static void enterSleepMode() {
     delay(50);
     display.init(115200, true, 2, false);
     display.setRotation(1);
-    
+
     // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
     // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
     pinMode(BUTTON_3, INPUT_PULLUP);
@@ -370,7 +370,7 @@ void setup() {
 
     display.init(115200, true, 2, false);
     display.setRotation(1);  // landscape: 296 wide × 128 tall
-    
+
     // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
     // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
     pinMode(BUTTON_3, INPUT_PULLUP);
