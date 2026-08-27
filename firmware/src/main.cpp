@@ -242,7 +242,8 @@ static void drawClockFace() {
             (g_state == STATE_SYNCING || g_state == STATE_RESYNCING),
             g_ble_initialized,
             mac.c_str(),
-            getBatteryPercent()
+            getBatteryPercent(),
+            ECLOCK_VERSION
         };
 
         switch (g_state) {

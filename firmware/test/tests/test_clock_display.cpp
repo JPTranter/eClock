@@ -34,6 +34,7 @@ static ClockView makeView() {
     v.bleInitialized = true;
     v.macAddress = "AA:BB:CC:DD:EE:FF";
     v.batteryPercent = 100;
+    v.version = ECLOCK_VERSION;
     return v;
 }
 

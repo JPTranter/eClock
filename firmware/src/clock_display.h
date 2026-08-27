@@ -24,6 +24,7 @@
 #include <Fonts/FreeSans9pt7b.h>
 #include "FontChango88.h"        // 88pt Chango for the time digits (0-9, :)
 #include "material_icons.h"      // battery / bolt / sync-status bitmaps
+#include "clock_version.h"       // ECLOCK_VERSION
 #include "clock_logic.h"
 
 namespace clock_display {
@@ -60,6 +61,10 @@ struct ClockView {
 
     // Battery: a valid percentage, or -1 for USB power (show the bolt icon).
     int      batteryPercent;
+
+    // Firmware version string (e.g. "v0.1.0"), shown at the bottom left of the
+    // syncing screen. "" hides it.
+    const char* version;
 };
 
 // Draw the "No Time!" error screen (boot failed to sync).
@@ -97,6 +102,13 @@ void drawSyncingScreen(Display& d, const ClockView& v) {
         d.getTextBounds(v.macAddress, 0, 0, &macx, &macy, &macw, &mach);
         d.setCursor(d.width() - macw - 2, d.height() - 2 - 4);
         d.print(v.macAddress);
+    }
+
+    // Firmware version at the bottom left (a quick way to know what's flashed).
+    if (v.version && v.version[0]) {
+        d.setFont(&FreeSans9pt7b);
+        d.setCursor(2, d.height() - 2 - 5);
+        d.print(v.version);
     }
 }
 

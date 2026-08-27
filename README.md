@@ -207,9 +207,11 @@ jobs:
   artifact for 14 days.
 
 A separate [`.github/workflows/release.yml`](.github/workflows/release.yml) runs when a
-release is published (or a `v*` tag is pushed): it builds the mbed firmware and attaches
-a versioned `.hex` (the serial-DFU flash artifact) and `.elf` (for debugging) to the
-release, so the firmware can be downloaded and flashed straight to a device.
+release is published (or a `v*` tag is pushed): it injects the tag as the firmware
+version, builds the mbed firmware, and attaches a versioned **`.uf2`** (drag-and-drop onto
+the bootloader), **`.hex`** (serial-DFU flash artifact), and **`.elf`** (for debugging) to
+the release. The injected version is shown at the bottom left of the clock's syncing
+screen, so the flashed build is always identifiable.
 
 Locally, a [`.pre-commit-config.yaml`](.pre-commit-config.yaml) runs the same gitleaks
 secret scan (plus trailing-whitespace, end-of-file, YAML, large-file, private-key and

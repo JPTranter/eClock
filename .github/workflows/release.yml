@@ -25,19 +25,27 @@ jobs:
           python-version: "3.11"
       - name: Install PlatformIO Core
         run: pip install platformio==6.1.19
+      - name: Collect version
+        id: ver
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Inject version into the firmware
+        run: printf '#pragma once\n#ifndef ECLOCK_VERSION\n#define ECLOCK_VERSION "%s"\n#endif\n' "$TAG" > firmware/include/clock_version.h
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
       - name: Build mbed firmware
         run: pio run -e mbed
         working-directory: firmware
 
-      - name: Collect version
-        id: ver
-        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Copy artifact to a versioned name
+      - name: Copy artifact to a versioned name + generate UF2
         run: |
           mkdir -p release
           cp firmware/.pio/build/mbed/firmware.hex "release/eClock-${TAG}.hex"
           cp firmware/.pio/build/mbed/firmware.elf "release/eClock-${TAG}.elf"
+          # Generate a .uf2 (drag-and-drop onto the XIAO-BOOT mass-storage drive)
+          # from the .hex. The app runs at 0x27000; nRF52840 family = 0xada52840.
+          curl -sSfL "https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py" -o /tmp/uf2conv.py
+          python /tmp/uf2conv.py "release/eClock-${TAG}.hex" \
+            -o "release/eClock-${TAG}.uf2" -f 0xada52840 -b 0x27000 -c
         env:
           TAG: ${{ steps.ver.outputs.tag }}
 
@@ -50,12 +58,19 @@ jobs:
           body: |
             ## eClock firmware ${{ steps.ver.outputs.tag }}
 
-            Build of the device-side firmware for the XIAO BLE nRF52840 + EN05 ePaper clock.
+            Build of the device-side firmware for the XIAO BLE nRF52840 + EN05 ePaper clock
+            (version shown at the bottom left of the syncing screen).
 
-            - **`eClock-<tag>.hex`** — what you flash (Intel HEX, serial DFU).
+            - **`eClock-<tag>.uf2`** — drag-and-drop onto the `XIAO-BOOT` mass-storage drive
+              to flash (most convenient on machines where the bootloader drive remounts).
+            - **`eClock-<tag>.hex`** — flash via serial DFU (the reliable path).
             - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
 
-            ### Flash it (serial DFU — the reliable path)
+            ### Flash it
+            **UF2 (easiest):** put the board in the bootloader (double-tap RESET), then copy
+            the `.uf2` onto the `XIAO-BOOT` drive.
+
+            **Serial DFU (reliable):**
             1. Put the board into its bootloader (double-tap RESET, or run
                `python tools/reset_to_bootloader.py`).
             2. Upload with PlatformIO using the bootloader port:
