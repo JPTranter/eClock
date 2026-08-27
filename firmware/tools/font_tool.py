@@ -602,8 +602,8 @@ def main():
         print('  python font_tool.py scan "C:/path/to/font.ttf"')
         print("  python font_tool.py generate font.ttf 82 src/FontName.h \\")
         print('          --copyright "Copyright (c) 2024 Type Foundry"')
-        print("  python font_tool.py center src/FontChango82.h")
-        print("  python font_tool.py fix src/FontChango82.h")
+        print("  python font_tool.py center src/FontChango88.h")
+        print("  python font_tool.py fix src/FontChango88.h")
         sys.exit(1)
 
     cmd = sys.argv[1]
