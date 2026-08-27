@@ -193,6 +193,12 @@ See [the full setup guide](docs/SETUP.md), [the hardware pinout](docs/hardware/P
 before wiring anything, and [the status](docs/STATUS.md) for where the project stands
 today. All the docs are linked from [Documentation](#documentation) above.
 
+## Author
+
+Built by **Jason Tranter** ([@JPTranter](https://github.com/JPTranter)). This is a
+personal low-power ePaper clock project — designed, built and tested in the spare
+hours it took to make something that simply works, every day, on time.
+
 ## License
 
 MIT — see `LICENSE`.
