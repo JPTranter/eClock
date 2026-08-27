@@ -193,6 +193,25 @@ See [the full setup guide](docs/SETUP.md), [the hardware pinout](docs/hardware/P
 before wiring anything, and [the status](docs/STATUS.md) for where the project stands
 today. All the docs are linked from [Documentation](#documentation) above.
 
+## CI & secret scanning
+
+Every push / pull request runs [GitHub Actions](.github/workflows/ci.yml) with three
+jobs:
+
+- **Secret scan** — runs `gitleaks` across the full git history; fails on any detected
+  credential, token, or private key.
+- **Firmware build** — `pio run -e mbed` on a clean runner, so the shipped firmware is
+  confirmed to compile.
+- **Host unit tests + coverage** — builds and runs the `firmware/test` fixture
+  (`ctest`), then generates a `main.cpp` coverage report and uploads it as a CI
+  artifact for 14 days.
+
+Locally, a [`.pre-commit-config.yaml`](.pre-commit-config.yaml) runs the same gitleaks
+secret scan (plus trailing-whitespace, end-of-file, YAML, large-file, private-key and
+merge-conflict checks) on every staged commit. Install once with
+`pip install pre-commit && pre-commit install`, or trigger manually with
+`pre-commit run --all-files`.
+
 ## Author
 
 Built by **Jason Tranter** ([@JPTranter](https://github.com/JPTranter)). This is a

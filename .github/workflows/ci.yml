@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Belt-and-braces secret scan on the CI side (pre-commit is a local, per-commit
+  # gate). Fails the job on any detected credential/token/private key.
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history so the scan sees all commits
+      - name: Install gitleaks
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+      - name: Run gitleaks (all history)
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --exit-code 1
+
+  # Build the firmware with PlatformIO (mbed core — the only env that builds the
+  # shipped main.cpp). Verifies it compiles cleanly on each check-in.
+  firmware:
+    name: Firmware build (PlatformIO mbed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO Core
+        run: pip install platformio==6.1.19
+      - name: Build mbed firmware
+        run: pio run -e mbed
+        working-directory: firmware
+
+  # Compile and run the host (x86) unit-test fixture, then generate a coverage
+  # report for main.cpp and store it as a CI artifact.
+  host-tests:
+    name: Host unit tests + coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install gcovr
+        run: pip install gcovr
+      - name: Configure
+        run: cmake -S firmware/test -B firmware/test/build -G Ninja
+      - name: Build
+        run: cmake --build firmware/test/build -j4
+      - name: Run tests
+        run: ctest --test-dir firmware/test/build --output-on-failure
+      - name: Generate coverage report
+        run: cmake --build firmware/test/build --target coverage
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-cpp-coverage
+          path: firmware/test/build/output/coverage/
+          retention-days: 14

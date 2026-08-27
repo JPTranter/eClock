@@ -1,0 +1,30 @@
+# Pre-commit configuration — https://pre-commit.com
+#
+# Hooks run on a staged-commit basis. The primary security hook is gitleaks
+# (secret scanning); the rest are lightweight hygiene checks. Idempotent hooks
+# can auto-fix with: pre-commit run --all-files
+#
+# Install once:   pip install pre-commit
+# Install hooks:  pre-commit install
+# Run now:        pre-commit run --all-files
+
+repos:
+  # Secret scanning (the important one). Scans staged content for credentials,
+  # tokens, private keys, API keys, etc. Blocks the commit on a match.
+  # https://github.com/gitleaks/gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        args: [--config, .gitleaks.toml]
+
+  # Basic hygiene (auto-fixable).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files    # actually catch accidentally-committed binaries
+      - id: check-merge-conflict
+      - id: detect-private-key         # blocks a committed private key outright

@@ -1,0 +1,25 @@
+# gitleaks configuration
+# https://github.com/gitleaks/gitleaks#configuration
+#
+# By default gitleaks reports any detected secret and fails CI. These allowlist
+# entries are for KNOWN-SAFE content, not real secrets:
+#   * vendored third-party code / compiled binary libraries (upstream mbed, the
+#     Adafruit GFX font data, etc.) — not authored by this project, and binary
+#     blobs frequently trip the generic lookalike heuristics (e.g. a hex string
+#     inside an .a or a font table) that gitleaks can't distinguish.
+# The actual project source (firmware/src, integrations/, docs/, tools/) is NOT
+# in the allowlist, so real secrets there are still caught.
+
+[extend]
+# Use the default rule set (keeps the built-in secret patterns).
+useDefault = true
+
+[allowlist]
+# Exclude build artifacts that deliberately ship with the vendored board variant.
+paths = [
+    '''firmware/variants/.*/[Ll]ibs/.*\.a''',
+    '''firmware/variants/.*/.*\.a''',
+    '''firmware/test/build/''',
+    '''firmware/test/output/''',
+    '''firmware/test/third_party/''',
+]
