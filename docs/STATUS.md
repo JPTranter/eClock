@@ -14,7 +14,12 @@ clipping fixed. Stay-awake behaviour hardened (button press during sleep
 keeps clock on until next 11pm, not just 15 min). New board family verified
 (identical XIAO nRF52840 Plus + EN05, recognised by Seeed bootloader PID
 0x0064). A host test harness compiles the unmodified `main.cpp` on the host
-(≥98% line coverage, real PNG renders). **Added a real low-battery warning:
+(≥98% line coverage, real PNG renders). **Refactored: extracted the pure logic
+into a hardware-free `firmware/src/clock_logic` module (time math, sleep
+window, battery classification) with its own focused unit tests, and split
+`drawClockFace()` into per-screen renderers; `main.cpp` stays the adapter
+layer and all 8 host suites pass (see `docs/research/modularization-proposal.md`).**
+**Added a real low-battery warning:
 ≤20% shows the empty-battery icon with the low %, and ≤5% draws a final
 "LOW BATTERY / Charge me now" screen that persists on the panel even after
 power loss (a dead clock can't be mistaken for a live-but-stopped one).**

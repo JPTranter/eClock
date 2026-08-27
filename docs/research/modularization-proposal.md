@@ -160,3 +160,35 @@ embedded C++ pattern.
   be a separate `CMakeLists.txt` in `firmware/test/` — acceptable?
 - Should the Python simulation live in `firmware/tools/` (alongside
   `power_budget.py`) or in a new `firmware/test/` directory?
+
+## Resolution (2026-08-27)
+
+This proposal was written before the host C++ test harness existed. That harness
+was built instead of the Python simulation, so the refactor took a different,
+lower-risk path:
+
+- **Extract the pure logic** into a hardware-free module: `firmware/src/clock_logic.h`
+  + `clock_logic.cpp`. It owns time/date math (`splitLocalTime`,
+  `localSecondsOfDay`), the sleep-window computation (`isNighttime`,
+  `secondsToShutdown`, `kNightSleepSec`), and battery classification
+  (`isLowBattery`, `isCriticalBattery`, `kLowBatteryPct`, `kCriticalBatteryPct`).
+  It has no Arduino/BLE/GxEPD dependency and is compiled into both the firmware
+  build and the host tests.
+- **`main.cpp` stays the adapter + wiring layer** (BLE, display, buttons, sleep,
+  setup/loop). It delegates decisions to `clock_logic` and keeps all its file-scoped
+  `static` symbols so the existing harness (which `#include`s `main.cpp`) keeps
+  working unchanged. The `goto` in `drawClockFace()` was removed and each screen
+  is now its own named renderer (`drawNoTimeScreen`, `drawSyncingScreen`,
+  `drawRunningFace`, `drawSleepingScreen`).
+- **A dedicated pure test** (`firmware/test/tests/test_clock_logic.cpp`) tests the
+  logic module directly, separately from the `main.cpp` hook.
+
+The full multi-file split (clock_ble, clock_display, etc.) was deliberately NOT done:
+splitting `main.cpp` into many `.cpp` files would make the harness's `static`-reaching
+`#include "main.cpp"` impossible, and the adapter glue (BLE/display) is not where the
+testable decision logic lives. The logic-extraction approach single-sources the best
+part to test without throwing away the 98% coverage harness.
+
+Behavior is unchanged: all host test suites pass and the running/syncing PNG renders
+are byte-identical to pre-refactor, and the refactored firmware was flashed and runs
+on hardware.

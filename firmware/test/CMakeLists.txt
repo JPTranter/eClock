@@ -84,6 +84,7 @@ add_library(eclock_mock STATIC
     ${ECLOCK_MOCKS_DIR}/Print.cpp
     ${ECLOCK_GFX_DIR}/Adafruit_GFX.cpp
     ${ECLOCK_HARN_DIR}/png_dump.cpp
+    ${ECLOCK_SRC_DIR}/clock_logic.cpp     # pure logic, compiled for host tests too
 )
 target_include_directories(eclock_mock PUBLIC ${ECLOCK_MOCKS_DIR} ${ECLOCK_HARN_DIR})
 
@@ -105,6 +106,7 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Test executables. Add each test file here.
 # ---------------------------------------------------------------------------
+eclock_test(test_clock_logic tests/test_clock_logic.cpp)
 eclock_test(test_smoke      tests/test_smoke.cpp)
 eclock_test(test_setup      tests/test_setup.cpp)
 eclock_test(test_time       tests/test_time.cpp)

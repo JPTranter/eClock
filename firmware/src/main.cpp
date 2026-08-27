@@ -12,6 +12,7 @@
 
 #include "board_pins.h"
 #include "material_icons.h"
+#include "clock_logic.h"
 #include <GxEPD2_BW.h>
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
@@ -83,21 +84,21 @@ static volatile bool g_button_pending = false;
 // again at the next nightly shutdown (11pm). g_awake_until is a millis()
 // timestamp ("stay awake until"); it is only non-zero after a button wake.
 static uint32_t g_awake_until = 0;
-static const uint8_t  SLEEP_START_HOUR = 23;    // 11pm
-static const uint8_t  SLEEP_END_HOUR   = 5;     // 5am
+// These exposed constants mirror clock_logic::k* so the host-test harness
+// (which #includes main.cpp and references these by name) keeps working, while
+// the single source of truth for the values lives in clock_logic.h.
+static const uint8_t  SLEEP_START_HOUR = clock_logic::kSleepStartHour;  // 11pm
+static const uint8_t  SLEEP_END_HOUR   = clock_logic::kSleepEndHour;    // 5am
 // The night sleep window (23:00 -> 05:00) is always 6 hours of wall-clock
 // time. We sleep a FIXED duration rather than a epoch-derived target, so a
 // DST transition in the middle of the night cannot shift the wake-up hour.
-static const uint32_t NIGHT_SLEEP_S = 6 * 3600; // 23:00 -> 05:00
+static const uint32_t NIGHT_SLEEP_S = clock_logic::kNightSleepSec;   // 6 * 3600
 
-// Battery thresholds. The percentage maps 3.3V (0%) to 4.2V (100%) — see
-// getBatteryPercent(). Below LOW_BATTERY_PCT the clock shows the empty-battery
-// icon plus a "Charge!" prompt. At or below CRITICAL_BATTERY_PCT the clock is
-// about to die, so it replaces the clock face with an unambiguous low-battery
-// screen: that last image persists on the ePaper panel even after total power
-// loss, so a dead clock can never be mistaken for a live-but-frozen time.
-static const int8_t  LOW_BATTERY_PCT     = 20;
-static const int8_t  CRITICAL_BATTERY_PCT = 5;
+// Battery thresholds — see clock_logic.h. Below LOW_BATTERY_PCT the clock shows
+// the empty-battery icon; at/below CRITICAL_BATTERY_PCT it draws the final
+// "LOW BATTERY" screen (which persists on the panel even after power loss).
+static const int8_t  LOW_BATTERY_PCT     = clock_logic::kLowBatteryPct;
+static const int8_t  CRITICAL_BATTERY_PCT = clock_logic::kCriticalBatteryPct;
 
 // Set true once the clock has drawn the final low-battery screen. It stops the
 // loop from redrawing the normal clock face over that message, so the last
@@ -148,10 +149,11 @@ static bool anyButtonPressed() {
 
 // ==== Time helpers =============================================================
 static void updateTimeStruct() {
-    int32_t local_time = g_epoch + g_tz_offset;
-    g_hour = (local_time / 3600) % 24;
-    g_minute = (local_time / 60) % 60;
-    g_second = local_time % 60;
+    clock_logic::TimeParts t =
+        clock_logic::splitLocalTime(g_epoch, g_tz_offset);
+    g_hour = t.hour;
+    g_minute = t.minute;
+    g_second = t.second;
 }
 
 static void startSyncAttempt() {
@@ -218,6 +220,164 @@ static int getBatteryPercent() {
     return pct;
 }
 
+// --- Screen renderers (one function per state) --------------------------------
+// Each renders a single screen into the current ePaper frame/page loop. They are
+// called from drawClockFace() based on g_state. The display has already been
+// cleared (fillScreen) and text colour set by the caller.
+
+// NO_TIME: boot never got a sync — show an error and a hint.
+static void drawNoTimeScreen() {
+    display.setFont(&FreeSansBold24pt7b);
+    const char* errMsg = "No Time!";
+    int16_t ex, ey;
+    uint16_t ew, eh;
+    display.getTextBounds(errMsg, 0, 0, &ex, &ey, &ew, &eh);
+    display.setCursor((display.width() - ew) / 2 - ex,
+                      (display.height() + eh) / 2);
+    display.print(errMsg);
+
+    display.setFont(&FreeSans9pt7b);
+    // 2px bottom margin + 5px for descenders (g/y/j drop below the baseline).
+    // Setting the baseline at height() clips them, since setCursor() positions
+    // the baseline, not the text top.
+    display.setCursor(0, display.height() - 2 - 5);
+    display.print(F("Press any button to sync"));
+}
+
+// SYNCING / RESYNCING: waiting for HA to write the time. Shows the MAC once BLE
+// is initialised (avoids the "00:00:00:00:00:00" flash on the pre-BLE draw).
+static void drawSyncingScreen() {
+    display.setFont(&FreeSansBold24pt7b);
+    const char* msg = (g_state == STATE_SYNCING) ? "Syncing..." : "Re-sync..";
+    int16_t mx, my;
+    uint16_t mw, mh;
+    display.getTextBounds(msg, 0, 0, &mx, &my, &mw, &mh);
+    display.setCursor((display.width() - mw) / 2 - mx,
+                      (display.height() + mh) / 2);
+    display.print(msg);
+
+    if (g_ble_initialized) {
+        String macStr = BLE.address();
+        display.setFont(&FreeSans9pt7b);
+        int16_t macx, macy;
+        uint16_t macw, mach;
+        display.getTextBounds(macStr.c_str(), 0, 0, &macx, &macy, &macw, &mach);
+        display.setCursor(display.width() - macw - 2, display.height() - 2 - 4);
+        display.print(macStr);
+    }
+}
+
+// RUNNING: big single-line time, with date + battery on top, sync status + AM/PM
+// below. Shared by STATE_RUNNING and by SYNCING/RESYNCING when a time is valid.
+static void drawRunningFace() {
+    // Convert 24h to 12h display, suppress leading zero.
+    uint8_t disp_hour = g_hour % 12;
+    if (disp_hour == 0) disp_hour = 12;
+    const char* ampm = (g_hour < 12) ? "AM" : "PM";
+
+    char timeBuf[8];
+    snprintf(timeBuf, sizeof(timeBuf), "%u:%02u", disp_hour, g_minute);
+
+    // Date string from the local epoch.
+    time_t t = g_epoch + g_tz_offset;
+    struct tm* tm_info = gmtime(&t);
+    char dateBuf[32];
+    strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
+
+    // Date line at the top left.
+    display.setFont(&FreeSans9pt7b);
+    display.setCursor(2, 12);
+    display.print(dateBuf);
+
+    // Battery line at the top right.
+    int batPct = getBatteryPercent();
+    if (batPct < 0) {
+        // USB power: bolt icon only, no text.
+        display.drawBitmap(display.width() - 2 - icon_bolt_w, 2,
+            icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, GxEPD_BLACK);
+    } else {
+        // Battery icon + percentage. Below the low threshold the icon swaps to
+        // the empty-battery glyph so the low state is obvious at a glance.
+        bool low = clock_logic::isLowBattery(batPct);
+        const uint8_t* bmp = low ? icon_battery_empty_bitmap : icon_battery_bitmap;
+        uint8_t icon_w = low ? icon_battery_empty_w : icon_battery_w;
+        uint8_t icon_h = low ? icon_battery_empty_h : icon_battery_h;
+        char pctBuf[8];
+        snprintf(pctBuf, sizeof(pctBuf), "%d%%", batPct);
+        display.setFont(&FreeSans9pt7b);
+        int16_t bx, by;
+        uint16_t bw, bh;
+        display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
+        // 6px gap between the battery icon and the percentage.
+        int text_x = display.width() - 2 - icon_w - 6 - bw;
+        int icon_x = display.width() - 2 - icon_w;
+        display.drawBitmap(icon_x, 2, bmp, icon_w, icon_h, GxEPD_BLACK);
+        display.setCursor(text_x, 12);
+        display.print(pctBuf);
+    }
+
+    // Big time digits, centred.
+    display.setFont(&font);
+    display.setTextWrap(false);
+    int16_t tx, ty;
+    uint16_t tw, th;
+    display.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
+    // Top text bottom edge is ~16; bottom text top edge is ~114. Available
+    // space is 98 px, centered at 65. Chango 88pt has typical yOff=-90, h=64,
+    // so the ink centre relative to the baseline is -90 + 32 = -58, giving a
+    // baseline of 65 - (-58) = 123.
+    display.setCursor((display.width() - tw) / 2 - tx, 123);
+    display.print(timeBuf);
+
+    // Status icon + last sync time at the bottom left.
+    uint8_t icon_w, icon_h;
+    const uint8_t* icon_bmp;
+    if (g_state == STATE_RESYNCING || g_state == STATE_SYNCING) {
+        icon_bmp = icon_syncing_bitmap;
+        icon_w = icon_syncing_w;
+        icon_h = icon_syncing_h;
+    } else if (g_last_sync_failed) {
+        icon_bmp = icon_failed_bitmap;
+        icon_w = icon_failed_w;
+        icon_h = icon_failed_h;
+    } else {
+        icon_bmp = icon_synced_bitmap;
+        icon_w = icon_synced_w;
+        icon_h = icon_synced_h;
+    }
+    // Icon vertically centred with the text, both shifted up to fit the 2px
+    // bottom margin.
+    int icon_y = display.height() - 2 - 10 - icon_h / 2;
+    display.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
+
+    // Last successful sync time to the right of the icon.
+    char syncTime[8];
+    snprintf(syncTime, sizeof(syncTime), "%02u:%02u",
+             g_last_sync_hour, g_last_sync_minute);
+    display.setFont(&FreeSans9pt7b);
+    display.setCursor(2 + icon_w + 2, display.height() - 2 - 5);
+    display.print(syncTime);
+
+    // AM/PM at the bottom right.
+    int16_t apx, apy;
+    uint16_t apw, aph;
+    display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
+    display.setCursor(display.width() - apw - 2, display.height() - 2 - 4);
+    display.print(ampm);
+}
+
+// SLEEPING: defensive placeholder (drawSleepIcon() is called separately).
+static void drawSleepingScreen() {
+    display.setFont(&FreeSansBold24pt7b);
+    const char* msg = "Zzz";
+    int16_t zx, zy;
+    uint16_t zw, zh;
+    display.getTextBounds(msg, 0, 0, &zx, &zy, &zw, &zh);
+    display.setCursor((display.width() - zw) / 2 - zx,
+                      (display.height() + zh) / 2 - 14);
+    display.print(msg);
+}
+
 static void drawClockFace() {
     display.setPartialWindow(0, 0, display.width(), display.height());
     display.firstPage();
@@ -226,188 +386,23 @@ static void drawClockFace() {
         display.setTextColor(GxEPD_BLACK);
 
         switch (g_state) {
-            // ---------------------------------------------------------------
-            // NO_TIME: error state — boot failed to sync within 10 seconds
-            // ---------------------------------------------------------------
-            case STATE_NO_TIME: {
-                display.setFont(&FreeSansBold24pt7b);
-                const char* errMsg = "No Time!";
-                int16_t ex, ey;
-                uint16_t ew, eh;
-                display.getTextBounds(errMsg, 0, 0, &ex, &ey, &ew, &eh);
-                display.setCursor((display.width() - ew) / 2 - ex,
-                                  (display.height() + eh) / 2);
-                display.print(errMsg);
-
-                display.setFont(&FreeSans9pt7b);
-                // 2px bottom margin + 5px for descenders (g/y/j drop below the
-                // baseline). Setting the baseline at height() clips them, since
-                // setCursor() positions the baseline, not the text top.
-                display.setCursor(0, display.height() - 2 - 5);
-                display.print(F("Press any button to sync"));
+            case STATE_NO_TIME:
+                drawNoTimeScreen();
                 break;
-            }
-
-            // ---------------------------------------------------------------
-            // SYNCING / RESYNCING: waiting for HA to write the time
-            // ---------------------------------------------------------------
             case STATE_SYNCING:
-            case STATE_RESYNCING: {
+            case STATE_RESYNCING:
                 if (g_epoch > 0) {
-                    goto draw_running_face;
+                    drawRunningFace();   // has time, just show the clock face
+                } else {
+                    drawSyncingScreen();
                 }
-
-                display.setFont(&FreeSansBold24pt7b);
-                const char* msg = (g_state == STATE_SYNCING)
-                                  ? "Syncing..."
-                                  : "Re-sync..";
-                int16_t mx, my;
-                uint16_t mw, mh;
-                display.getTextBounds(msg, 0, 0, &mx, &my, &mw, &mh);
-                display.setCursor((display.width() - mw) / 2 - mx,
-                                  (display.height() + mh) / 2);
-                display.print(msg);
-
-                // MAC address at the bottom right (useful for HA config)
-                // Only shown once BLE is initialised (avoids initial
-                // "00:00:00:00:00:00" flash on the pre-BLE draw).
-                if (g_ble_initialized) {
-                String macStr = BLE.address();
-                display.setFont(&FreeSans9pt7b);
-                int16_t macx, macy;
-                uint16_t macw, mach;
-                display.getTextBounds(macStr.c_str(), 0, 0, &macx, &macy, &macw, &mach);
-                display.setCursor(display.width() - macw - 2,
-                                  display.height() - 2 - 4);
-                                    display.print(macStr);
-                                }
-
                 break;
-            }
-
-            // ---------------------------------------------------------------
-            // RUNNING: big single-line time, status below
-            // ---------------------------------------------------------------
             case STATE_RUNNING:
-            draw_running_face: {
-                // Convert 24h to 12h display, suppress leading zero
-                uint8_t disp_hour = g_hour % 12;
-                if (disp_hour == 0) disp_hour = 12;
-                const char* ampm = (g_hour < 12) ? "AM" : "PM";
-
-                char timeBuf[8];
-                snprintf(timeBuf, sizeof(timeBuf), "%u:%02u", disp_hour, g_minute);
-
-                // Calculate date string
-                time_t t = g_epoch + g_tz_offset;
-                struct tm *tm_info = gmtime(&t);
-                char dateBuf[32];
-                strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
-
-                // Date line at the top left
-                display.setFont(&FreeSans9pt7b);
-                display.setCursor(2, 12);
-                display.print(dateBuf);
-                
-                // Battery line at the top right
-                int batPct = getBatteryPercent();
-                if (batPct < 0) {
-                    // USB power: bolt icon only, no text
-                    display.drawBitmap(display.width() - 2 - icon_bolt_w, 2,
-                        icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, GxEPD_BLACK);
-                } else {
-                    // Battery icon + percentage. Below the low threshold the
-                    // icon swaps to the empty-battery glyph so the low state is
-                    // obvious at a glance even before the final warning screen.
-                    const uint8_t* bmp = (batPct <= LOW_BATTERY_PCT)
-                        ? icon_battery_empty_bitmap : icon_battery_bitmap;
-                    uint8_t icon_w = (batPct <= LOW_BATTERY_PCT)
-                        ? icon_battery_empty_w : icon_battery_w;
-                    uint8_t icon_h = (batPct <= LOW_BATTERY_PCT)
-                        ? icon_battery_empty_h : icon_battery_h;
-                    char pctBuf[8];
-                    snprintf(pctBuf, sizeof(pctBuf), "%d%%", batPct);
-                    display.setFont(&FreeSans9pt7b);
-                    int16_t bx, by;
-                    uint16_t bw, bh;
-                    display.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
-                    // 6px gap between the battery icon and the percentage
-                    int text_x = display.width() - 2 - icon_w - 6 - bw;
-                    int icon_x = display.width() - 2 - icon_w;
-                    display.drawBitmap(icon_x, 2, bmp, icon_w, icon_h, GxEPD_BLACK);
-                    display.setCursor(text_x, 12);
-                    display.print(pctBuf);
-                }
-
-                // Use the big time font
-                display.setFont(&font);
-                display.setTextWrap(false);
-
-                // Centre the time string horizontally
-                int16_t tx, ty;
-                uint16_t tw, th;
-                display.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
-                
-                // Top text bottom edge is ~16. Bottom text top edge is ~114.
-                // Available space is 114 - 16 = 98 pixels. Center is 16 + 49 = 65.
-                // Chango 88pt has typical yOff=-90, h=64. Center of ink relative
-                // to baseline is -90 + 32 = -58. Baseline = 65 - (-58) = 123.
-                display.setCursor((display.width() - tw) / 2 - tx, 123);
-                display.print(timeBuf);
-
-                // Status icon + last sync time at the bottom left
-                uint8_t icon_w, icon_h;
-                const uint8_t* icon_bmp;
-                if (g_state == STATE_RESYNCING || g_state == STATE_SYNCING) {
-                    icon_bmp = icon_syncing_bitmap;
-                    icon_w = icon_syncing_w;
-                    icon_h = icon_syncing_h;
-                } else if (g_last_sync_failed) {
-                    icon_bmp = icon_failed_bitmap;
-                    icon_w = icon_failed_w;
-                    icon_h = icon_failed_h;
-                } else {
-                    icon_bmp = icon_synced_bitmap;
-                    icon_w = icon_synced_w;
-                    icon_h = icon_synced_h;
-                }
-                
-                // Icon vertically centred with text, both shifted up to fit 2px bottom margin
-                // text_mid ≈ 116 (midpoint of h-2 - icon_h/2 zone), icon_y = text_mid - icon_h/2
-                int icon_y = display.height() - 2 - 10 - icon_h / 2;  // ≈106 for 19px icon
-                display.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, GxEPD_BLACK);
-
-                // Last successful sync time to the right of the icon
-                char syncTime[8];
-                snprintf(syncTime, sizeof(syncTime), "%02u:%02u", g_last_sync_hour, g_last_sync_minute);
-                display.setFont(&FreeSans9pt7b);
-                display.setCursor(2 + icon_w + 2, display.height() - 2 - 5);  // baseline shifted up to centre with icon
-                display.print(syncTime);
-
-                // AM/PM at the bottom right
-                int16_t apx, apy;
-                uint16_t apw, aph;
-                display.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
-                display.setCursor(display.width() - apw - 2, display.height() - 2 - 4);
-                display.print(ampm);
+                drawRunningFace();
                 break;
-            }
-
-            // ---------------------------------------------------------------
-            // SLEEPING: should not be reached (drawSleepIcon is called
-            // separately), but handle gracefully as a blank screen.
-            // ---------------------------------------------------------------
-            case STATE_SLEEPING: {
-                display.setFont(&FreeSansBold24pt7b);
-                const char* msg = "Zzz";
-                int16_t zx, zy;
-                uint16_t zw, zh;
-                display.getTextBounds(msg, 0, 0, &zx, &zy, &zw, &zh);
-                display.setCursor((display.width() - zw) / 2 - zx,
-                                  (display.height() + zh) / 2 - 14);
-                display.print(msg);
+            case STATE_SLEEPING:
+                drawSleepingScreen();
                 break;
-            }
         }
     } while (display.nextPage());
 }
@@ -495,18 +490,16 @@ static void enterSleepMode() {
     // cannot shift the wake-up time. Re-sync with HA on wake.
     bool woke_by_button = false;
 
-    // Compute local seconds-of-day for the "stay awake until next 11pm"
+    // Compute local seconds-of-day and the "stay awake until next 11pm"
     // target (used only when a button press interrupts the night).
     // The epoch may be stale during DST (off by 1 hour), but the error
     // is bounded and the clock re-syncs immediately on button wake.
-    int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
-    if (local_sec < 0) local_sec += 86400;
-    uint32_t sec_to_shutdown =
-        (SLEEP_START_HOUR * 3600 - local_sec + 86400) % 86400;
+    int32_t local_sec = clock_logic::localSecondsOfDay(g_epoch, g_tz_offset);
+    uint32_t sec_to_shutdown = clock_logic::secondsToShutdown(local_sec);
 
     // Sleep for a fixed 6-hour window, immune to DST
     woke_by_button = g_button_sem.try_acquire_for(
-                        std::chrono::milliseconds(NIGHT_SLEEP_S * 1000UL));
+                        std::chrono::milliseconds(clock_logic::kNightSleepSec * 1000UL));
 
     // Re-power the ePaper panel
     pinMode(EPD_POWER, OUTPUT);
@@ -686,7 +679,8 @@ void loop() {
             // check entirely in that case so a USB-powered clock never shows the
             // LOW BATTERY screen (a -1 would otherwise satisfy `<= 5`).
             int batPct = getBatteryPercent();
-            if (!g_low_battery_lock && batPct >= 0 && batPct <= CRITICAL_BATTERY_PCT) {
+            if (!g_low_battery_lock && batPct >= 0 &&
+                clock_logic::isCriticalBattery(batPct)) {
                 g_low_battery_lock = true;
                 BLE.stopAdvertise();
                 drawLowBatteryScreen();
@@ -694,14 +688,12 @@ void loop() {
                 break;
             }
 
-            // Check if it's time to enter sleep mode (11pm-5am)
-            int32_t local_sec = (g_epoch + g_tz_offset) % 86400;
-            if (local_sec < 0) local_sec += 86400;
-            int local_hour = local_sec / 3600;
-            // The (int32_t) cast makes the "awake until" comparison immune to
-            // millis() wraparound (which happens ~49.7 days after boot).
-            if ((local_hour >= SLEEP_START_HOUR || local_hour < SLEEP_END_HOUR)
-                && (int32_t)(now - g_awake_until) >= 0) {
+            // Check if it's time to enter sleep mode (11pm-5am). The (int32_t)
+            // cast on the "awake until" comparison makes it immune to millis()
+            // wraparound (which happens ~49.7 days after boot).
+            int32_t local_sec = clock_logic::localSecondsOfDay(g_epoch, g_tz_offset);
+            if (clock_logic::isNighttime(local_sec) &&
+                (int32_t)(now - g_awake_until) >= 0) {
                 g_state = STATE_SLEEPING;
                 enterSleepMode();
                 break;
