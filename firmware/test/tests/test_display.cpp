@@ -21,7 +21,14 @@ TEST(Display, NoTimeStateRendersAndDumps) {
 }
 
 TEST(Display, SyncingStateRendersAndDumps) {
-    expectRender("output/syncing.png", STATE_SYNCING);
+    // Render the post-BLE-init syncing page (what a user sees on a working
+    // clock). g_ble_initialized = true so the pseudo-MAC is drawn, matching the
+    // setup() flow where drawClockFace() runs again after BLE.begin().
+    ClockFixture::reset();
+    g_state = STATE_SYNCING;
+    g_ble_initialized = true;
+    ClockFixture::runDrawClockFace();
+    EXPECT_TRUE(ClockFixture::dumpPng("output/syncing.png"));
 }
 
 TEST(Display, ResyncingStateRendersAndDumps) {

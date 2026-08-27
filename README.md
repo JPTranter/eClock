@@ -10,6 +10,10 @@ Assistant side), power-budget modelling and a 98%-coverage host test harness are
 committed and working. See `docs/PROJECT_PLAN.md` for the phase plan and
 `docs/STATUS.md` for where things actually stand today.
 
+> **Using one?** Read the [User Guide](docs/USER_GUIDE.md) — what the screen says, what
+> every icon means, and how to use the buttons. If this is a stock clock you've been
+> given, that page is for you.
+
 ## Screenshots
 
 These are real renders of the ePaper output, produced by the host test harness
@@ -50,6 +54,7 @@ docs/
   PROJECT_PLAN.md            Phased development plan and success criteria
   STATUS.md                  Current phase, what is done, what is next
   SETUP.md                   Verified build/flash/monitor instructions
+  USER_GUIDE.md              How to use the clock: screens, icons, buttons, troubleshooting
   hardware/PINOUT.md         Pin mappings, power control, board traps
   hardware/datasheets/       Vendor docs — NOT committed, see README there
   lessons/LESSONS_LEARNT.md  Accumulated hard-won findings
