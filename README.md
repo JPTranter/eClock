@@ -10,6 +10,16 @@ Assistant side), power-budget modelling and a 98%-coverage host test harness are
 committed and working. See `docs/PROJECT_PLAN.md` for the phase plan and
 `docs/STATUS.md` for where things actually stand today.
 
+## Screenshots
+
+These are real renders of the ePaper output, produced by the host test harness
+(`firmware/test/`) — the syncing page while the clock waits for its first Home
+Assistant time sync, and the running clock face once it has time.
+
+| Syncing | Time |
+| --- | --- |
+| <img src="docs/screenshots/syncing.png" alt="Syncing page" width="296"> | <img src="docs/screenshots/running.png" alt="Clock face" width="296"> |
+
 ## Design goals
 
 - Readable at a glance from across a room.
@@ -47,6 +57,7 @@ docs/
   research/                  Open research questions and their answers
   testing/                   Test checklists
   enclosure/                 Enclosure design notes
+  screenshots/               Real ePaper renders (from firmware/test/) used in this README
 firmware/
   platformio.ini             Two envs: adafruit and mbed (default = mbed; the current firmware is mbed-only)
   src/main.cpp               Clock firmware: state machine, BLE time sync, ePaper display, power management
