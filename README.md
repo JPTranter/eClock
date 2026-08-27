@@ -71,6 +71,18 @@ Pinout, power-rail gotchas, and board-specific traps are documented in
 [the hardware pinout](docs/hardware/PINOUT.md). Read that before wiring or writing
 display code — the EN05 does not talk to the panel over the visible header pins.
 
+## Where to buy
+
+The recommended kit bundles the XIAO BLE nRF52840 board, the EN05 ePaper display
+board, and the 2.9" panel together:
+
+- **Seeed Studio XIAO ePaper DIY Kit (nRF52840 + EN05)** —
+  <https://www.seeedstudio.com/XIAO-ePaper-DIY-Kit-nRF52840-EN05.html>
+
+The parts can also be bought separately (XIAO nRF52840 board + EN05 ePaper display
+board + 2.9" monochrome ePaper panel). A 500 mAh LiPo and a 3D-printed enclosure are
+supplied or printed separately.
+
 ## Repository layout
 
 ```
