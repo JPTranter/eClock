@@ -1053,3 +1053,55 @@ pio run -e mbed -t upload --upload-port COM6 # use the port it printed ("Device 
 After upload the board re-enumerates as the application (PID `0x8045`) on a separate
 COM port — verify with `python -c "import serial.tools.list_ports as l; [print(p.device,
 hex(p.pid), p.description) for p in l.comports()]"`.
+
+---
+
+## 24. Low-battery warning, and two traps it exposed (verified 2026-08-27)
+
+Added a real low-battery warning: **≤20%** swaps the running-face battery icon to the
+empty-battery glyph (still showing the %), and **≤5%** draws a final "LOW BATTERY /
+Charge me now" screen once, stops the radio, and locks the display so nothing redraws
+over it. Two traps surfaced while wiring this up:
+
+### Signed sentinel vs threshold: `-1 <= 5` is true
+
+`getBatteryPercent()` returns **`-1`** as a sentinel when USB VBUS is detected ("not a
+percentage"). The loop's critical-battery check did `getBatteryPercent() <=
+CRITICAL_BATTERY_PCT` with the constant **5**. In C, `-1 <= 5` is **true**, so a
+USB-powered clock drew the LOW BATTERY screen on boot. The display-side render was
+already safe (it tests `batPct < 0` first and draws the bolt icon), but the loop's
+one-line check had no guard.
+
+**Fix:** never compare a sentinel against a threshold without first rejecting the
+sentinel — `batPct >= 0 && batPct <= CRITICAL_BATTERY_PCT`. The regression test
+asserts `getBatteryPercent() == -1` on USB *and* that the low-battery lock is not
+engaged. This is the general lesson: an "unreadable / special" sentinel value must be
+filtered out before any numeric comparison, or the sign/magnitude of the sentinel can
+accidentally satisfy the condition.
+
+### A latent malformed icon exposed by first use
+
+`icon_battery_empty` (Material symbol U+F30D) in `material_icons.h` was an **open-top**
+battery outline — only side rails and a bottom bar, no top edge, no nub. No code used
+it before, so the bad data sat silently. The moment the low-battery warning started
+drawing it, the "⊔" shape became obvious. It was regenerated as a closed rectangular
+outline matching the full battery's silhouette. **Lesson: an asset that is generated
+but never exercised can carry garbage; "first use" is where such latent defects
+surface, so visually review any newly-used icon/sprite on the first render.**
+
+### Run the fixture from the right working directory (stale-render trap)
+
+The display test writes `output/*.png` **relative to the current working directory**
+(the CMake `add_test` sets `WORKING_DIRECTORY` to `firmware/test`, but invoking
+`test_display.exe` directly does not). Running it from `firmware/` or the repo root
+dumped PNGs into a stray `output/` folder at that location — and, worse, my visual
+"verification" read a **stale** `firmware/test/output/*.png` that the run had not
+actually regenerated (same byte-identical hashes). **Always run the test binary from
+`firmware/test/`** (or via `ctest`), and confirm the PNG's mtime moved before trusting
+a render.
+
+### Deploy-to-review loop for a firmware change
+
+A visual/logic change is best reviewed without a hardware round-trip: regenerate the
+PNG via the fixture first, then flash once you're happy, then confirm the board
+re-enumerates on its application COM port.

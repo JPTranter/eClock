@@ -18,6 +18,10 @@ keeps clock on until next 11pm, not just 15 min). New board family verified
 ≤20% shows the empty-battery icon with the low %, and ≤5% draws a final
 "LOW BATTERY / Charge me now" screen that persists on the panel even after
 power loss (a dead clock can't be mistaken for a live-but-stopped one).**
+**Fixed a USB bug where a USB-powered clock falsely showed LOW BATTERY on
+boot** (`getBatteryPercent()` returns `-1` on USB and `-1 <= 5`; now guarded).
+Also added a [User Guide](docs/USER_GUIDE.md), a charging section, and linked
+the hardware kit purchase page.**
 
 ## Honest state of play
 
@@ -37,7 +41,9 @@ power loss (a dead clock can't be mistaken for a live-but-stopped one).**
 || Power budget | **Modelled but unmeasured.** `docs/research/power-budget-analysis.md` — the project's #1 risk now has a reproducible model. Ready for bench measurement. |
 || Enclosure | Notes only, no CAD |
 || Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. |
-|| Build/test docs | `README.md` has full CLI build + test + flash steps; `docs/SETUP.md` written and verified |
+|| Low-battery warning | **Verified.** ≤20% empty icon, ≤5% final "LOW BATTERY" screen; USB (VBUS) correctly does not trigger it. |
+|| Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
+|| User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 
 ## Immediate next steps
 
