@@ -1105,3 +1105,57 @@ a render.
 A visual/logic change is best reviewed without a hardware round-trip: regenerate the
 PNG via the fixture first, then flash once you're happy, then confirm the board
 re-enumerates on its application COM port.
+
+---
+
+## 25. Release artifacts (UF2), firmware version, and CI guardrails (verified 2026-08-27)
+
+### The nRF52 app does not start at 0x00000
+
+The mbed `.hex` for this board begins at **0x27000**, not 0x00000 — space below that is
+the soft device / bootloader. This matters for any raw-flash artifact (UF2, `--base`)
+and for interpreting a hex dump: `firmware/.../conf/mbed_app.json` sets
+`target.mbed_app_start = 0x27000`, and the first data record of `firmware.hex` is at
+`(segment 0x2000):0x7000` = 0x27000. Get the base from the linker/app-start config, not
+a guess.
+
+### UF2 from the .hex: base + family ID
+
+The canonical `uf2conv.py` (microsoft/uf2) converts a `.hex` to a `.uf2` for
+drag-and-drop flashing. It needs two numbers:
+  - **`-b 0x27000`** — the app base (see above).
+  - **`-f 0xada52840`** — the nRF52840 family ID (this is the board's family, not a
+    device-unique value).
+Command used in the release workflow:
+  `python uf2conv.py <firmware.hex> -o <firmware.uf2> -f 0xada52840 -b 0x27000 -c`.
+Note: UF2's `-c` converts the input in-place family handling; verify the resulting
+`.uf2` is non-empty and flashes. UF2 exists purely for mass-storage convenience — the
+reliable path on this machine is still serial DFU of the `.hex` (the bootloader's
+XIAO-BOOT drive does not remount dependably).
+
+### Firmware version: single source, CI-injected
+
+We show the build's version at the bottom left of the syncing screen. The clean pattern:
+a `firmware/include/clock_version.h` with a plain `#define ECLOCK_VERSION "0.1.0"`
+guarded by `#ifndef` so a build can override it with `-DECLOCK_VERSION="..."`. The CI
+release workflow regenerates that header from the release tag *before* `pio run`, so the
+number on screen always matches the release. Keep it a display-only string — the clock
+never branches on it. Thread it into the view layer the same way as any payload: add a
+`version` field to `ClockView`, render it only if non-empty.
+
+### Pre-commit + gitleaks as the change gate
+
+`gitleaks` runs as a pre-commit hook (and again in CI) to block any credential/token/
+private key. It needs a `.gitleaks.toml` allowlist for deliberately-committed binary/`
+third-party content (the vendored mbed `.a` libs, `firmware/test/third_party`) —
+compiled blobs trip the generic lookalike heuristics. Hygiene hooks (EOF-fixer,
+trailing-whitespace) auto-fix on first run, which touches many files at once; run
+`pre-commit run --all-files` once, commit the style churn, then it stops recurring.
+
+### YAML `on:` key gotcha (GitHub Actions vs PyYAML)
+
+GitHub Actions' `on:` (workflow trigger) is parsed as the boolean `true` by PyYAML's
+YAML 1.1, so `yaml.safe_load(...)["on"]` raises `KeyError` — a false alarm when
+validating a workflow locally. GitHub uses its own parser that handles `on` correctly.
+To validate, check `jobs`/step structure instead of `["on"]`, and never assign a second
+step the same `id` in a job (duplicate step ids are invalid).

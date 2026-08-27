@@ -28,7 +28,11 @@ power loss (a dead clock can't be mistaken for a live-but-stopped one).**
 **Fixed a USB bug where a USB-powered clock falsely showed LOW BATTERY on
 boot** (`getBatteryPercent()` returns `-1` on USB and `-1 <= 5`; now guarded).
 Also added a [User Guide](docs/USER_GUIDE.md), a charging section, and linked
-the hardware kit purchase page.**
+the hardware kit purchase page. **Project matured into release/CI territory:
+a pre-commit gitleaks secret scanner + GitHub Actions (build, host tests +
+coverage, release artifacts) were added, the firmware now shows its version at
+the bottom left of the syncing screen, and a release publishes a versioned
+.hex/.uf2/.elf for direct device flashing.**
 
 ## Honest state of play
 
@@ -51,6 +55,9 @@ the hardware kit purchase page.**
 || Low-battery warning | **Verified.** ≤20% empty icon, ≤5% final "LOW BATTERY" screen; USB (VBUS) correctly does not trigger it. |
 || Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
+|| CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
+|| Firmware version | **Added.** `ECLOCK_VERSION` (default 0.1.0, CI-injected) shown at the bottom left of the syncing screen. |
+|| Release artifacts | **Added.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf` for direct device flashing. |
 
 ## Immediate next steps
 
@@ -66,6 +73,8 @@ the hardware kit purchase page.**
 4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
    target across the whole credible current range (37–335 days → 126+ days).
    Product trade-off: the minute digit only changes every 5 minutes.
+5. **Cut the first tagged release** to exercise `.github/workflows/release.yml`
+   end-to-end and confirm the generated `.uf2` actually flashes the device.
 
 ## Open questions
 
