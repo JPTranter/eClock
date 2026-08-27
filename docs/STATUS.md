@@ -57,7 +57,7 @@ the bottom left of the syncing screen, and a release publishes a versioned
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 || CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
 || Firmware version | **Added.** `ECLOCK_VERSION` (default 0.1.0, CI-injected) shown at the bottom left of the syncing screen. |
-|| Release artifacts | **Added.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf` for direct device flashing. |
+|| Release artifacts | **Added; UF2 unverified.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. **The `.hex` (serial DFU) is the working flash path; the `.uf2` did not boot when flashed** — see `docs/lessons/LESSONS_LEARNT.md` §25. |
 
 ## Immediate next steps
 
@@ -73,8 +73,9 @@ the bottom left of the syncing screen, and a release publishes a versioned
 4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
    target across the whole credible current range (37–335 days → 126+ days).
    Product trade-off: the minute digit only changes every 5 minutes.
-5. **Cut the first tagged release** to exercise `.github/workflows/release.yml`
-   end-to-end and confirm the generated `.uf2` actually flashes the device.
+5. **Investigate or drop the UF2 artifact** — the `v0.1.0` release `.uf2` did not
+   boot when flashed. Either make the `.uf2` flash correctly or stop publishing it and
+   document `.hex` (serial DFU) as the only flash path.
 
 ## Open questions
 

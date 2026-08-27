@@ -1128,10 +1128,30 @@ drag-and-drop flashing. It needs two numbers:
     device-unique value).
 Command used in the release workflow:
   `python uf2conv.py <firmware.hex> -o <firmware.uf2> -f 0xada52840 -b 0x27000 -c`.
-Note: UF2's `-c` converts the input in-place family handling; verify the resulting
-`.uf2` is non-empty and flashes. UF2 exists purely for mass-storage convenience — the
-reliable path on this machine is still serial DFU of the `.hex` (the bootloader's
-XIAO-BOOT drive does not remount dependably).
+
+### The release UF2 did NOT flash (verified 2026-08-27)
+
+The `v0.1.0` release `.uf2` (734 KB, built with `-b 0x27000 -f 0xada52840`) **did not
+boot** when dragged onto the bootloader / flashed. The `.hex` via serial DFU is what
+actually works. The `.uf2` was syntactically valid and non-empty, but the device
+did not run it.
+
+**Takeaways:**
+- **Treat the `.uf2` as unverified.** Size + a successful build do not prove a UF2
+  boots; only flashing proves it. Until a UF2 is confirmed to boot, publish the
+  **`.hex`** as the primary flash artifact and serial DFU as the documented path.
+- **The `-c` (convert) flag** makes uf2conv convert the *family* block in place; the
+  resulting `.uf2` can still be wrong if the bootloader expects a different layout. This
+  is exactly the kind of artifact that only "doesn't boot" rather than failing loudly.
+- **Re-enable `uf2families.json`** — uf2conv.py's `load_families()` opens a
+  `uf2families.json` next to the script; without it the conversion crashes (the first
+  release run failed on this before I added the file).
+- **Do not trust a generated artifact without a hardware smoke test.** The release
+  pipeline validates *build*, not *flashing*.
+
+The reliable path on this machine is serial DFU of the `.hex` (the bootloader's
+XIAO-BOOT drive does not remount dependably). The `.uf2` is a convenience that has not
+yet been proven to boot.
 
 ### Firmware version: single source, CI-injected
 
