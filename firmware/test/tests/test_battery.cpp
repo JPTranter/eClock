@@ -87,3 +87,18 @@ TEST(Battery, AboveCriticalDoesNotLock) {
     ClockFixture::runLoop();
     EXPECT_FALSE(ClockFixture::lowBatteryLock());
 }
+
+// REGRESSION: on USB power getBatteryPercent() returns -1 (not a percentage).
+// The loop must NOT treat that as critically low and draw the LOW BATTERY
+// screen, or a USB-powered clock shows a false low-battery warning on boot.
+TEST(Battery, UsbPowerDoesNotTriggerLowBattery) {
+    ClockFixture::reset();
+    nrf_power_instance.USBREGSTATUS = POWER_USBREGSTATUS_VBUSDETECT_Msk;
+    ClockFixture::setEpoch(1693000000, 36000);
+    g_state = STATE_RUNNING;
+
+    EXPECT_EQ(ClockFixture::runGetBatteryPercent(), -1);
+
+    ClockFixture::runLoop();
+    EXPECT_FALSE(ClockFixture::lowBatteryLock());
+}

@@ -682,7 +682,11 @@ void loop() {
             // panel keeps that message even after the cell dies, so a dead clock
             // never shows a stale, trusting time. A recharge reboots the board
             // fresh into STATE_SYNCING (setup() always starts a clean sync).
-            if (!g_low_battery_lock && getBatteryPercent() <= CRITICAL_BATTERY_PCT) {
+            // getBatteryPercent() returns -1 on USB power; skip the low-battery
+            // check entirely in that case so a USB-powered clock never shows the
+            // LOW BATTERY screen (a -1 would otherwise satisfy `<= 5`).
+            int batPct = getBatteryPercent();
+            if (!g_low_battery_lock && batPct >= 0 && batPct <= CRITICAL_BATTERY_PCT) {
                 g_low_battery_lock = true;
                 BLE.stopAdvertise();
                 drawLowBatteryScreen();
