@@ -8,21 +8,19 @@ small battery. It never needs winding, and it even corrects itself for daylight
 saving.
 
 This guide covers everything you need to use one day-to-day: what the screen is
-telling you, what the little icons mean, and how to use the buttons.
+telling you, what the little icons mean, and how to use the buttons. Every screen
+shown here is a real render of what the clock displays.
 
 ---
 
 ## The screen at a glance
 
-The display always shows one of four screens. Here's what each one means.
+The display always shows one of four screens. Here's what each one looks like and
+what it means.
 
 ### The clock face (the one you'll see every day)
 
-```
-Sat 26 Aug 2023              100%
-       7:46
- ↻ 00:00                        AM
-```
+![The clock face](screenshots/running.png)
 
 | Where | What it is |
 | --- | --- |
@@ -34,10 +32,7 @@ Sat 26 Aug 2023              100%
 
 ### The syncing screen (first few seconds after power-on)
 
-```
-      Syncing...
-              AA:BB:CC:DD:EE:FF
-```
+![The syncing screen](screenshots/syncing.png)
 
 The clock is waiting for a Home Assistant device to send it the correct time. The
 address at the bottom right is its Bluetooth address — used once, when you first set
@@ -46,10 +41,7 @@ clock face appears as soon as it has a valid time.
 
 ### The "No Time!" screen (only if it can't sync)
 
-```
-       No Time!
-Press any button to sync
-```
+![The "No Time!" screen](screenshots/no_time.png)
 
 The clock booted but nobody sent it the time within a few seconds. Don't worry —
 just press any button and it will try again. This screen rarely appears once setup is
@@ -57,40 +49,40 @@ complete.
 
 ### The sleep screen (overnight)
 
-```
-        Zz
-```
+![The sleep screen](screenshots/sleeping.png)
 
 Between **11pm and 5am** the clock turns its display off to save battery and shows a
-gentle "Zz." It wakes itself at 5am, fully synced and ready for the day. Pressing a
-button during sleep wakes it immediately (see "Buttons" below).
+big **"Zzz"** with the word *Sleeping* beneath it. It wakes itself at 5am, fully
+synced and ready for the day. Pressing a button during sleep wakes it immediately
+(see "Buttons" below).
 
 ---
 
 ## The icons, translated
 
-The little symbols on the clock face are your status panel. Here's every one of them.
+The small symbols on the clock face are your status panel. Here's every one of them,
+described as you actually see them on the panel.
 
 ### Battery (top right)
 
-| Icon | Meaning |
+| What you see | Meaning |
 | --- | --- |
-| 🔋 **Battery + %** | Running on battery. The number is roughly how much charge is left. |
-| ⚡ **Bolt** | Plugged into USB / charger. It's charging — no percentage shown because it's running off the wire, not the cell. |
+| **A battery icon with a number, e.g. `85%`** | Running on battery. The number is roughly how much charge is left. |
+| **A lightning-bolt icon** | Plugged into USB / charger. It's charging — no percentage shown because it's running off the wire, not the cell. |
 
 When the battery gets genuinely low the clock shows it in the percentage — charge it
 soon. Because the panel barely uses power, a full charge lasts months.
 
 ### Sync status (bottom left)
 
-| Icon | Meaning |
-| --- | --- |
-| 🔄 **Circular arrows** | The clock is syncing right now — it's talking to Home Assistant for the correct time. |
-| ✔ **Tick / check** | Sync is good. The clock has the correct, up-to-date time. This is the normal "happy" state — you'll see this 99% of the time. |
-| ✖ **Cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry on its own. |
+Next to the icon is a small two-digit time (e.g. `09:41`) — that's the time of the
+**last successful sync**, so you always know how fresh your clock's time is.
 
-The small numbers next to the icon are the time of the **last successful sync**, so
-you always know how fresh your clock's time is.
+| What you see | Meaning |
+| --- | --- |
+| **A white circle with a tick / check mark** | Sync is good. The clock has the correct, up-to-date time. This is the normal "happy" state — you'll see this almost all the time. |
+| **A pair of circular arrows** | The clock is syncing right now — it's talking to Home Assistant for the correct time. |
+| **A circle with an X / cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry on its own. |
 
 ---
 
@@ -158,7 +150,7 @@ ahead or drift, it just waits patiently.
 | Shows "No Time!" | Home Assistant hasn't sent a time yet | Press any button to retry; check HA pairing. |
 | Cross icon (sync failed) | It couldn't reach HA for an update | Make sure HA is on and within Bluetooth range; it retries automatically. |
 | Bolt icon, no % | It's plugged in / charging | That's normal — it's on the charger. |
-| Blank "Zz" at night | It's sleeping | Normal — it wakes itself at 5am (or on a button press). |
+| "Zzz" at night | It's sleeping | Normal — it wakes itself at 5am (or on a button press). |
 
 If the clock ever seems confused, give it a quick reset: unplug and replug power, and
 it will re-sync all by itself.

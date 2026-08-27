@@ -377,7 +377,7 @@ static void drawClockFace() {
             // ---------------------------------------------------------------
             case STATE_SLEEPING: {
                 display.setFont(&FreeSansBold24pt7b);
-                const char* msg = "Zz";
+                const char* msg = "Zzz";
                 int16_t zx, zy;
                 uint16_t zw, zh;
                 display.getTextBounds(msg, 0, 0, &zx, &zy, &zw, &zh);
@@ -397,9 +397,9 @@ static void drawSleepIcon() {
         display.fillScreen(GxEPD_WHITE);
         display.setTextColor(GxEPD_BLACK);
 
-        // Big 'Zz' centred
+        // Big 'Zzz' centred
         display.setFont(&FreeSansBold24pt7b);
-        const char* msg = "Zz";
+        const char* msg = "Zzz";
         int16_t mx, my;
         uint16_t mw, mh;
         display.getTextBounds(msg, 0, 0, &mx, &my, &mw, &mh);
