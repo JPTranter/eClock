@@ -106,7 +106,8 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Test executables. Add each test file here.
 # ---------------------------------------------------------------------------
-eclock_test(test_clock_logic tests/test_clock_logic.cpp)
+eclock_test(test_clock_logic  tests/test_clock_logic.cpp)
+eclock_test(test_clock_display tests/test_clock_display.cpp)
 eclock_test(test_smoke      tests/test_smoke.cpp)
 eclock_test(test_setup      tests/test_setup.cpp)
 eclock_test(test_time       tests/test_time.cpp)

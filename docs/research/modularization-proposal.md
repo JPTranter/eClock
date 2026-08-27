@@ -174,21 +174,27 @@ lower-risk path:
   (`isLowBattery`, `isCriticalBattery`, `kLowBatteryPct`, `kCriticalBatteryPct`).
   It has no Arduino/BLE/GxEPD dependency and is compiled into both the firmware
   build and the host tests.
+- **Extract the display rendering** into `firmware/src/clock_display.h`: header-only
+  TEMPLATE functions (templated on the display type) so the same source compiles
+  against both the real GxEPD2 driver and the host mock. Each screen is a named
+  renderer (`drawNoTimeScreen`, `drawSyncingScreen`, `drawRunningFace`,
+  `drawSleepingScreen`, `drawSleepIcon`, `drawLowBatteryScreen`) that takes a
+  `ClockView` value struct — a pure function of its inputs, with no dependency on
+  main.cpp statics, ArduinoBLE, the battery ADC or the board pins.
 - **`main.cpp` stays the adapter + wiring layer** (BLE, display, buttons, sleep,
-  setup/loop). It delegates decisions to `clock_logic` and keeps all its file-scoped
-  `static` symbols so the existing harness (which `#include`s `main.cpp`) keeps
-  working unchanged. The `goto` in `drawClockFace()` was removed and each screen
-  is now its own named renderer (`drawNoTimeScreen`, `drawSyncingScreen`,
-  `drawRunningFace`, `drawSleepingScreen`).
+  setup/loop). It builds a `ClockView` from its statics and delegates to
+  `clock_logic` and `clock_display`; it keeps its file-scoped `static` symbols so
+  the existing harness (which `#include`s `main.cpp`) works unchanged.
 - **A dedicated pure test** (`firmware/test/tests/test_clock_logic.cpp`) tests the
   logic module directly, separately from the `main.cpp` hook.
 
-The full multi-file split (clock_ble, clock_display, etc.) was deliberately NOT done:
-splitting `main.cpp` into many `.cpp` files would make the harness's `static`-reaching
-`#include "main.cpp"` impossible, and the adapter glue (BLE/display) is not where the
-testable decision logic lives. The logic-extraction approach single-sources the best
-part to test without throwing away the 98% coverage harness.
+The full multi-file split (clock_ble, clock_display.cpp, etc.) was deliberately NOT
+done as separate `.cpp` files: splitting `main.cpp` into many `.cpp`s would make the
+harness's `static`-reaching `#include "main.cpp"` impossible. Instead the testable
+pieces (logic + display rendering) are extracted as pure functions of their inputs
+(`clock_logic` as a linked `.cpp`, `clock_display` as inline template renderers), which
+single-sources the parts worth testing without throwing away the 98% coverage harness.
 
-Behavior is unchanged: all host test suites pass and the running/syncing PNG renders
-are byte-identical to pre-refactor, and the refactored firmware was flashed and runs
-on hardware.
+Behavior is unchanged: all host test suites pass, the running/syncing PNG renders are
+byte-identical to pre-refactor, and the refactored firmware was flashed and runs on
+hardware.
