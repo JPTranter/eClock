@@ -2,9 +2,11 @@
 
 A Home Assistant custom component that keeps the eClock's time accurate over BLE.
 
-**Status: draft.** This code was written against earlier experimental firmware and has
-not been re-validated against firmware in this repository (there is none yet). Expect
-to revisit it during Phase 4.
+**Status: working.** This component was written against the firmware in this
+repository and validated end-to-end with Home Assistant (Phase 4 signoff: "Working
+end-to-end with HA"). The firmware advertises the Current Time Service (`0x1805`) and
+exposes a writable `0x2A2B` characteristic; this component discovers the clock and
+writes the current epoch + UTC offset.
 
 ## How it works
 
@@ -79,6 +81,6 @@ Without an address it attempts to discover the clock by checking the Bluetooth c
 
 - No config flow; YAML-only setup.
 - No entities exposed — the clock's battery level and last-sync time are not surfaced
-  in Home Assistant. Worth adding in Phase 4.
+  in Home Assistant. Not yet implemented.
 - Unload is only partially handled: the callback canceller is stored in `hass.data`
   but there is no `async_unload_entry`.

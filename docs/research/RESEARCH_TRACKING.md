@@ -8,7 +8,9 @@ earlier hands-on work that has not yet been reproduced by code in this repositor
 
 ## ePaper display library
 
-- **Status:** Answered (prior art) — needs reconfirmation in Phase 1/2
+- **Status:** Answered and verified (Phase 2 signoff). GxEPD2 with driver class
+  `GxEPD2_290_T94_V2` is in production use in `firmware/src/main.cpp`, and the host
+  test harness renders real PNG output through it.
 - **Answer:** Use **GxEPD2** with driver class `GxEPD2_290_T94_V2`, which maps to the
   SSD1680 controller on this panel.
 
@@ -29,19 +31,22 @@ earlier hands-on work that has not yet been reproduced by code in this repositor
 
 ## Arduino core selection
 
-- **Status:** Open — decision deferred to Phase 1 revalidation
-- **Trade-off:**
+- **Status:** Answered — **mbed core, decided.** The shipped `main.cpp` hard-requires it
+  (`#error "Must compile with mbed core for ArduinoBLE!"` unless `ECLOCK_CORE_MBED` is
+  defined), so the `adafruit` env does not build the current firmware.
+  `platformio.ini` sets `default_envs = mbed`.
+- **Trade-off (as it stood):**
   - **Adafruit nRF52 core:** display works flawlessly with `D16`/`D11`. But
     `Bluefruit.begin()` hard-faults, because the XIAO ships with the factory Seeed
     bootloader and `Bluefruit52Lib` requires the Adafruit nRF52 UF2 bootloader.
     Using BLE means reflashing the bootloader (SWD or a UF2 drop).
   - **Seeed mbed core + ArduinoBLE:** no bootloader reflash needed, but the display
-    requires remapping DC to `15` / RST to `11` *and* a low-level hack to disable the
-    TWIM/TWI peripherals squatting on P0.26/P0.27.
+    requires remapping DC/RST to the Plus-variant pins `D16`/`D11` and care around the
+    P0.31 DC/VBAT overlap (see `docs/lessons/LESSONS_LEARNT.md` §2).
 - **Note:** the original suspicion that the hard fault was an `LFRC` vs `LFXO`
   crystal setting was **wrong**. It is a bootloader incompatibility.
-- **Decision criteria:** whichever path gets a stable display *and* a stable BLE stack
-  with the fewest fragile hacks. Record the decision here once made.
+- **Decision:** mbed + ArduinoBLE works without reflashing the bootloader, so it was
+  chosen. Recorded here; the `adafruit` env is kept only for reference.
 
 ## Power management / deep sleep
 
@@ -61,43 +66,49 @@ earlier hands-on work that has not yet been reproduced by code in this repositor
 
 ## Battery monitoring
 
-- **Status:** Not started
-- **Needs:** how the XIAO exposes battery voltage (onboard divider, `VBAT` read,
-  charge-status pin), ADC reference and calibration, and mapping LiPo voltage to a
-  useful remaining-life indication. Sample under load, not mid-refresh.
+- **Status:** Answered and implemented. The clock reads battery voltage through the
+  onboard divider and shows a percentage on the running face. It has a two-tier
+  low-battery warning: **≤20%** swaps the battery icon for an empty battery, and
+  **≤5%** draws a final "LOW BATTERY / Charge me now" screen that persists on the
+  ePaper even after power loss.
+- **Needs:** bench measurement to validate the 3.3V→4.2V percentage mapping and
+  confirm the warning fires with useful lead time on real hardware.
 - **Deliverable:** on-screen battery indicator plus a low-battery warning with enough
-  lead time to be actionable.
+  lead time to be actionable. **Done** (see `firmware/src/main.cpp`).
 
 ## BLE time sync — device side
 
-- **Status:** Not started in this repo
-- **Design intent:** the clock advertises the Current Time Service
+- **Status:** Answered and implemented (Phase 4 signoff: working end-to-end).
+- **Design (as implemented):** the clock advertises the Current Time Service
   (`0x1805`) and accepts a write to the Current Time characteristic (`0x2A2B`).
   Payload is 8 bytes: little-endian `int32` Unix epoch followed by little-endian
   `int32` UTC offset in seconds (Python `struct.pack("<ii", epoch, tz_offset)`).
-- **Needs:** advertise only in short windows to save power, a manual resync button, a
-  retry path for missed syncs, and an on-screen staleness indicator when the last
-  successful sync is old.
+- **Implemented:** short-window advertising, a manual resync button, a retry path for
+  missed syncs, and an on-screen staleness indicator (the sync-status icon + last
+  sync time).
 
 ## BLE time sync — Home Assistant side
 
-- **Status:** Answered (draft committed) — not re-validated
-- **Answer:** custom component at
-  `integrations/homeassistant/custom_components/epaper_clock/`. It registers a
-  Bluetooth callback matched on service UUID `0x1805`, connects on a fresh
-  advertisement using `bleak_retry_connector.establish_connection`, and writes the
-  packed epoch and UTC offset. It filters advertisements older than 5 s, applies a
-  15 s cooldown against redundant syncs, and exposes an `epaper_clock.sync_time`
-  service for manual triggering (which bypasses the cooldown).
-- **Still to prove:** end-to-end against real firmware, including behaviour when the
-  clock is asleep and not advertising.
+- **Status:** Answered and validated end-to-end (Phase 4 signoff). Custom component at
+  `integrations/homeassistant/custom_components/epaper_clock/`. It filters
+  advertisements by the clock's MAC address (via a `mac_addresses` config array —
+  it does NOT match on service UUID alone, which caused conflicts with other devices
+  broadcasting the same service), connects on a fresh advertisement using
+  `bleak_retry_connector.establish_connection`, and writes the packed epoch and UTC
+  offset. It filters advertisements older than 5 s, applies a 15 s cooldown against
+  redundant syncs, and exposes an `epaper_clock.sync_time` service for manual
+  triggering (which bypasses the cooldown).
+- **Future:** surface the clock's battery level and last-sync time as HA entities
+  (not yet implemented).
 
 ## Daylight saving time
 
-- **Status:** Not started
-- **Approach:** the device stores epoch plus a UTC offset supplied by Home Assistant,
-  so DST correctness depends on resyncing after a transition rather than on any
-  onboard timezone database. Needs a test plan covering a DST change while offline.
+- **Status:** Partially answered. The device stores epoch plus a UTC offset supplied by
+  Home Assistant, so DST correctness depends on resyncing after a transition rather
+  than on any onboard timezone database. The host test harness exercises the
+  DST-immune sleep (a fixed 6-hour window, so a mid-sleep DST shift cannot move the
+  wake time). A full test plan covering a DST change while offline is still to be
+  written.
 
 ## Enclosure
 

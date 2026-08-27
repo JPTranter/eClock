@@ -82,8 +82,8 @@ project learned from them is written up in plain terms in `docs/hardware/PINOUT.
 `integrations/homeassistant/custom_components/epaper_clock/` contains a custom
 component that discovers the clock by BLE advertisement and writes the current epoch
 plus UTC offset to the standard Current Time characteristic (`0x2A2B`). It exposes an
-`epaper_clock.sync_time` service for manual resyncs. This host-side code is drafted
-but has not been re-validated against committed firmware — see `docs/STATUS.md`.
+`epaper_clock.sync_time` service for manual resyncs. The device and host sides were
+validated end-to-end in Phase 4 — see `docs/STATUS.md`.
 
 ## Building, flashing and testing from the command line
 
@@ -115,8 +115,8 @@ pio run -e mbed
 ```
 
 The first build downloads the platform and toolchain (a few hundred MB) and takes a few
-minutes; later builds are seconds. Flash/RAM usage is printed at the end (≈361 KB /
-44.6% flash, ≈74 KB / 31.5% RAM).
+minutes; later builds are seconds. Flash/RAM usage is printed at the end (≈353 KB /
+44.6% flash, ≈73 KB / 31.5% RAM).
 
 ### Run the host unit tests (no hardware needed)
 

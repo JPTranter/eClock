@@ -5,56 +5,42 @@
 The wiring changed completely between board revisions, and using the wrong mapping
 produces a panel that ignores everything with `Busy Timeout!`.
 
-| | Generation A | Generation B |
+| | Generation B (this board) | Legacy (older board) |
 | --- | --- | --- |
-| Boards | Older EN04 / early EN05, XIAO nRF52840 (non-Plus) | Current EN05, XIAO nRF52840 **Plus** |
-| Panel connection | Hidden pogo pins under the XIAO | Standard header pins |
-| CS | 7 (P1.12) | **D1** |
-| DC | 16 (P0.27) on Adafruit core, 15 on mbed | **D3** |
-| RST | 11 (P0.26) | **D0** |
-| BUSY | 3 (P0.29) | **D2** |
-| SCK / MOSI | via pogo pads | **D8 / D10** (default hardware SPI) |
-| Panel power | MOSFET gate on D6, must be driven HIGH | No gate — physical power switch |
-| IMU pin conflict | Yes (P0.26/P0.27) | No |
+| Boards | Current EN05, XIAO nRF52840 **Plus** | Older EN04 / early EN05, XIAO nRF52840 (non-Plus) |
+| Panel connection | Standard header pins | Hidden pogo pins under the XIAO |
+| CS | **D7** (P1.12) | 7 (P1.12) |
+| DC | **D16** (P0.31) — shared with VBAT (see §2 in lessons) | 16 (P0.27) on Adafruit core, 15 on mbed |
+| RST | **D11** (P0.15) | 11 (P0.26) |
+| BUSY | **D3** (P0.29) | 3 (P0.29) |
+| SCK / MOSI | **D8 / D10** (default hardware SPI) | via pogo pads |
+| Panel power | **MOSFET gate on D6** (P1.11), must be driven HIGH | MOSFET gate on D6, must be driven HIGH |
+| IMU pin conflict | No (conflict is D16/VBAT on P0.31) | Yes (P0.26/P0.27) |
 
-**This project's board is Generation B.** Determined empirically on 2026-08-22 with
-`firmware/tools/pin_diagnostic`, not from documentation.
+**This project's board is Generation B** — but it uses the **D7/D16/D11/D3/D6**
+mapping, **with** the D6 MOSFET panel-power gate. It is a XIAO nRF52840 **Plus**,
+selected in `firmware/include/board_pins.h` via the vendored
+`Seeed_XIAO_nRF52840_Plus` variant (required for the `D16`/`D11` macros). Confirmed on
+hardware 2026-08-22; see `docs/lessons/LESSONS_LEARNT.md` §1.
 
-### How generation was determined
+### Verifying the pin mapping
 
-A pull-up / pull-down scan classifies each pin: one driven by an attached device holds
-its level against both resistors, while an unconnected pin follows whichever resistor
-is applied. Result:
+The definitive test is to read the panel pins straight from `firmware/include/board_pins.h`
+— that is the source of truth the firmware compiles against:
 
-```
-  pin   pullup  pulldown  verdict
-  D0     0       0        DRIVEN LOW      <- RST
-  D1     1       1        DRIVEN HIGH     <- CS
-  D2     1       1        DRIVEN HIGH     <- BUSY
-  D3     0       0        DRIVEN LOW      <- DC
-  D6     1       0        floating        <- no MOSFET power gate here
-  D7     1       0        floating        <- Generation A CS: NOT CONNECTED
-  D16    1       0        floating        <- Generation A DC: NOT CONNECTED
+```cpp
+EPD_CS = D7, EPD_DC = D16 (P0.31), EPD_RST = D11 (P0.15),
+EPD_BUSY = D3 (P0.29), EPD_POWER = D6 (P1.11, MOSFET gate)
 ```
 
-D7 and D16 floating is conclusive: the Generation A pogo-pin mapping inherited from the
-old notes cannot work on this board. Reproduce with:
+If a `Busy Timeout!` appears, first confirm the **Plus variant** is selected (a stock
+variant does not define `D16`/`D11`, and the display never responds). A diagnostic
+pin-scan harness is available as `pio run -e pindiag`.
 
-```bash
-pio run -e pindiag -t upload --upload-port <bootloader port>
-```
+## Panel power gate (current board)
 
-Select the generation in `firmware/include/board_pins.h`; Generation B is the default.
-Build with `-DECLOCK_EN05_GEN_A=1` for the older hardware.
-
-## Generation A legacy notes
-
-These remain accurate for the older board and are kept for reference.
-
-### Panel power is behind a MOSFET on D6
-
-Generation A gates the panel's supply rail with a power-control circuit driven by
-**D6**. It must be an output driven HIGH before initialising the display:
+The panel's supply rail is behind a MOSFET driven by **D6** (P1.11). It must be an
+output driven HIGH before initialising the display:
 
 ```cpp
 pinMode(D6, OUTPUT);
@@ -63,12 +49,19 @@ delay(10);
 ```
 
 If D6 floats the panel receives no power. It accepts SPI writes without error and does
-nothing, which reads exactly like a software bug.
+nothing, which reads exactly like a software bug. The firmware drives this HIGH in
+`setup()` and cuts it LOW in `enterSleepMode()` to save power overnight.
 
-### The mbed core hardware-peripheral trap
+## Legacy board notes (older non-Plus hardware)
 
-On Generation A, `P0.27` (DC) and `P0.26` (RST) are shared with the onboard IMU's I2C
-bus (TWIM) and the red LED. The mbed startup sequence leaves the hardware I2C
+These apply to the older EN04 / early EN05 with a non-Plus XIAO, running on the hidden
+pogo-pin connection (P0.27 DC / P0.26 RST) with the IMU I2C conflict. Kept for
+reference only — the current board does not use this mapping.
+
+### The mbed core hardware-peripheral trap (legacy only)
+
+On the legacy board, `P0.27` (DC) and `P0.26` (RST) are shared with the onboard IMU's
+I2C bus (TWIM) and the red LED. The mbed startup sequence leaves the hardware I2C
 peripheral enabled on those pins, and on the nRF52 an active hardware peripheral
 **completely overrides GPIO toggling**. The display library toggles DC; the I2C
 controller silently swallows it; the panel never sees a command.
@@ -85,25 +78,25 @@ NRF_GPIO->PIN_CNF[27] = 3;   // DC  back to standard GPIO
 This disables the IMU's I2C bus as a side effect. Acceptable for a clock; relevant if
 you later want motion wake.
 
-### Pin macros that do not exist
+### Pin macros that do not exist (stock variant only)
 
-The Adafruit variant header defines only `D0`–`D10`. There is no `D11` or `D16` macro,
-so `#define EPD_DC D16` fails to compile with *"'D16' was not declared in this scope"*.
-The pin **indices** are still correct — `g_ADigitalPinMap` in `variant.cpp` maps index
-16 to P0.27 and index 11 to P0.26 — so use bare integers.
+The **stock** (non-Plus) Adafruit variant header defines only `D0`–`D10`, so there is no
+`D11` or `D16` macro and `#define EPD_DC D16` fails with *"'D16' was not declared in this
+scope"*. This project uses the vendored `Seeed_XIAO_nRF52840_Plus` variant, which defines
+`D11` (P0.15) and `D16` (P0.31) — so this is a non-issue for the current board. It is
+only a concern if a stock variant is selected by mistake.
 
 ## Core selection consequences
 
 | | Adafruit core | Seeed mbed core |
 | --- | --- | --- |
-| Display (Gen B) | Works; D0–D10 identical on both cores | Works; same indices |
-| Display (Gen A) | Rock solid with 16/11 | Needs the TWIM-disable hack |
+| Display (current Plus board) | Works with `D7`/`D16`/`D11`/`D3` | Works with the same pins (mbed is required for BLE) |
 | BLE stack | `Bluefruit52Lib` | `ArduinoBLE` |
 | BLE caveat | `Bluefruit.begin()` hard-faults on the factory Seeed bootloader; requires flashing the Adafruit nRF52 UF2 bootloader | Works without reflashing |
 
-A welcome side effect of Generation B: because the panel uses `D0`–`D10`, which both
-cores define identically, the pin mapping is no longer core-dependent. That removes one
-of the two reasons the core choice was hard.
+The mbed core + ArduinoBLE path was chosen (see `docs/lessons/LESSONS_LEARNT.md` §23) so
+the shipped firmware needs no bootloader reflash. The `adafruit` env does not build the
+current `main.cpp`.
 
 ## Panel identification
 
@@ -116,13 +109,15 @@ of the two reasons the core choice was hard.
 
 Work through this in order:
 
-1. **Which generation is the board?** Run `pio run -e pindiag`. If D7/D16 float, it is
-   Generation B and any pogo-pin mapping is wrong.
-2. On Generation A: is D6 driven HIGH?
-3. On Generation B: is the **physical power switch on**, and is the display's FPC fully
-   seated in its connector? There is no software power gate to check.
-4. Are DC and RST using the alias correct for the generation *and* core?
-5. On Generation A + mbed: has the TWIM-disable hack run before display init?
+1. **Is the Plus variant selected?** The current board needs the vendored
+   `Seeed_XIAO_nRF52840_Plus` variant. With a stock variant, `D16`/`D11` are undefined
+   and the panel never responds (`Busy Timeout!`). Run `pio run -e pindiag` to scan the
+   pins and confirm `CS=D7`, `DC=D16`, `RST=D11`, `BUSY=D3`.
+2. **Is D6 driven HIGH?** The panel rail is gated by the D6 MOSFET — if it floats, the
+   panel is unpowered and ignores everything.
+3. Is the display's FPC fully seated in its connector?
+4. Are DC and RST using the correct Plus-variant aliases (`D16` → P0.31, `D11` → P0.15)?
+5. On a legacy (non-Plus) board + mbed: has the TWIM-disable hack run before display init?
 6. **Read the BUSY pin directly.** On the SSD1680, `1` = busy and `0` = idle. If BUSY
    is stuck at `1` and never falls, no amount of SPI will help — the controller is not
    running. Either it has no power, the FPC is not seated, or the panel is defective.

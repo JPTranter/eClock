@@ -32,7 +32,7 @@ Traced from `firmware/src/main.cpp`:
 | --- | --- | --- |
 | boot | `SYNCING` | full draw + BLE advertising (~12 mA) until HA writes the time (1–3 s) |
 | 05:00–23:00 | `RUNNING` | partial refresh (880 ms) every 60 s; battery ADC each tick; BLE off except an hourly ~2 s re-sync; WFE idle between ticks; **panel rail (D6) powered the whole 18 h** |
-| 23:00–05:00 | `SLEEPING` | one full "Zz" draw (3.4 s); BLE off; panel rail cut (D6 LOW); WFE sleep up to 6 h; button wake with a 15-min cooldown |
+| 23:00–05:00 | `SLEEPING` | one full "Zzz" draw (3.4 s); BLE off; panel rail cut (D6 LOW); WFE sleep up to 6 h; button wake keeps the clock on until the next 11pm |
 | 05:00 | `RESYNCING` | panel re-powered, full init (3.4 s clear), BLE re-sync |
 
 Measured timing (from `docs/lessons`, Phases 2–3):
@@ -45,7 +45,7 @@ Measured timing (from `docs/lessons`, Phases 2–3):
 Consequences baked into the model:
 
 - **1080** partial refreshes/day (18 h × 60)
-- **2** full refreshes/day (the 23:00 "Zz" draw + the 05:00 re-init clear)
+- **2** full refreshes/day (the 23:00 "Zzz" draw + the 05:00 re-init clear)
 - **18** BLE syncs/day, ~2 s each (HA answers in 1–3 s; the 30 s
   `SYNC_TIMEOUT` is only exercised when HA is down)
 

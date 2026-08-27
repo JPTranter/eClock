@@ -13,9 +13,11 @@ MAC address now shown on sync screen for HA configuration. "No Time!" text
 clipping fixed. Stay-awake behaviour hardened (button press during sleep
 keeps clock on until next 11pm, not just 15 min). New board family verified
 (identical XIAO nRF52840 Plus + EN05, recognised by Seeed bootloader PID
-0x0064). **A host test harness now compiles the unmodified `main.cpp` on the
-host (≥98% line coverage, real PNG renders) and a layout tweak (battery % gap
-2px → 6px) was made and reviewed via the PNG dump.**
+0x0064). A host test harness compiles the unmodified `main.cpp` on the host
+(≥98% line coverage, real PNG renders). **Added a real low-battery warning:
+≤20% shows the empty-battery icon with the low %, and ≤5% draws a final
+"LOW BATTERY / Charge me now" screen that persists on the panel even after
+power loss (a dead clock can't be mistaken for a live-but-stopped one).**
 
 ## Honest state of play
 
@@ -25,7 +27,7 @@ host (≥98% line coverage, real PNG renders) and a layout tweak (battery % gap
 | Hardware selected | Yes, in hand |
 | Toolchain | **Verified (mbed-only).** The shipped firmware requires the `mbed` core (`main.cpp` `#error`s without `ECLOCK_CORE_MBED`); the `adafruit` env does not build it. `default_envs = mbed`. |
 | Upload path | **Verified.** Serial DFU working on `mbed` core; reset script patched for `0x8045` PID |
-|| Firmware | **Phase 6 in progress.** Font bumped 82→88pt (+6pt, 63%→68% vertical fill). MAC address shown on sync screen. "No Time!" text clipping fixed. Button sleep-wake changed to keep clock on until next 11pm. Builds clean: 360KB flash (44.5%), 74KB RAM (31.5%). |
+|| Firmware | **Phase 6 in progress.** Font bumped 82→88pt (+6pt, 63%→68% vertical fill). MAC address shown on sync screen. "No Time!" text clipping fixed. Button sleep-wake changed to keep clock on until next 11pm. Low-battery warning added (≤20% empty icon, ≤5% final "LOW BATTERY" screen). Sleep shows "Zzz". Builds clean: 353KB flash (44.6%), 73KB RAM (31.5%). |
 || Pinout / board traps | **Verified.** Second board confirmed identical (XIAO nRF52840 Plus + EN05, Seeed bootloader PID 0x0064). |
 || Display driver approach | **Verified.** Font baseline variance now caught by tooling. Colon centering automated. |
 || Power management | **Phase 3 complete — budget now modelled.** Full six-term power model written (`docs/research/power-budget-analysis.md`). Key finding: 3 months not guaranteed at 1-min refresh without measured currents. |
