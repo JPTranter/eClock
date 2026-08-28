@@ -65,13 +65,23 @@ jobs:
             (version shown at the bottom left of the syncing screen).
 
             - **`eClock-<tag>.uf2`** — drag-and-drop onto the `XIAO-BOOT` mass-storage drive
-              to flash (most convenient on machines where the bootloader drive remounts).
+              to flash. **The bootloader auto-reboots into the app ~1 s after the copy
+              completes** (the filename does not matter as long as it is not `CURRENT.UF2`).
             - **`eClock-<tag>.hex`** — flash via serial DFU (the reliable path).
             - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
 
             ### Flash it
-            **UF2 (easiest):** put the board in the bootloader (double-tap RESET), then copy
-            the `.uf2` onto the `XIAO-BOOT` drive.
+            **UF2 (easiest):**
+            1. Put the board in the bootloader (double-tap RESET, or
+               `python tools/reset_to_bootloader.py`).
+            2. Copy this `.uf2` onto the `XIAO-BOOT` drive (any name except
+               `CURRENT.UF2`). You can drag it in Explorer, or run the verified
+               helper:
+               ```
+               python firmware/tools/uf2_flash.py eClock-<tag>.uf2
+               ```
+            3. The bootloader flashes it and **auto-reboots into the app ~1 s
+               later** — nothing else needed. (Verified on device 2026-08-28.)
 
             **Serial DFU (reliable):**
             1. Put the board into its bootloader (double-tap RESET, or run

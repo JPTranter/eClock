@@ -10,6 +10,7 @@ Seeed XIAO bootloader accepts.
 Usage: hex_to_uf2.py <in.hex> <out.uf2> --base 0x27000 --family 0xada52840
 """
 import argparse
+import os
 import struct
 
 UF2_MAGIC_START0 = 0x0A324655
@@ -54,6 +55,11 @@ def main():
     ap.add_argument('--family', type=lambda x: int(x, 0), default=0xada52840)
     args = ap.parse_args()
 
+    # Write the output next to the input hex's directory (which exists),
+    # creating the destination directory if needed.
+    out_path = os.path.abspath(args.out_uf2)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
     data = parse_hex(args.in_hex)
 
     # Build a packed bytearray at the base address.
@@ -80,15 +86,13 @@ def main():
         payload = image[bno * BLOCK_PAYLOAD:(bno + 1) * BLOCK_PAYLOAD]
         taddr = args.base + bno * BLOCK_PAYLOAD
         header = struct.pack(
-            '<IIIIIIIII',
+            '<IIIIIIII',
             UF2_MAGIC_START0, UF2_MAGIC_START1, flags, taddr,
-            len(payload), bno, num_blocks, image_size,
-            family,  # <-- familyID in its own slot; real size above
+            len(payload), bno, num_blocks, family,
         )
-        # Now add the magic end (2 more uint32).
-        header += struct.pack('<II', UF2_MAGIC_END0, UF2_MAGIC_END1)
-        block = header + bytes(payload)
-        block += bytes(512 - len(block))   # pad to 512
+        block = header + payload
+        block += bytes(512 - len(block))          # pad to 512
+        block = block[:508] + struct.pack('<I', UF2_MAGIC_END0)  # magic @508
         out += block
 
     with open(args.out_uf2, 'wb') as f:

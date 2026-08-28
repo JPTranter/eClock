@@ -174,10 +174,23 @@ uv tool install gcovr     # once, if not already installed
 cmake --build firmware/test/build --target coverage   # HTML in build/output/coverage/
 ```
 
-### Flash the firmware (serial DFU)
+### Flash the firmware
 
-Use serial DFU, not UF2 drag-and-drop (the bootloader's mass-storage drive does not
-remount reliably). Two steps — the reset helper prints the bootloader port:
+Two proven paths — UF2 drag-and-drop (easiest) and serial DFU (most repeatable).
+
+**UF2 drag-and-drop** (bootloader drive = `XIAO-BOOT`, board in bootloader):
+
+```bash
+cd firmware
+python tools/uf2_flash.py <your>.uf2    # backs up, copies, confirms auto-reboot
+```
+
+The bootloader flashes a **canonical-format** UF2 (8-word header, familyID@24,
+magicEnd@508 — what the repo's `hex_to_uf2.py` emits) and **auto-reboots into
+the app ~1 s after the copy completes**. Filename does not matter (only
+`CURRENT.UF2` is refused — that's the whole-flash dump; never copy over it).
+
+**Serial DFU** (works even when the drive doesn't remount):
 
 ```bash
 cd firmware

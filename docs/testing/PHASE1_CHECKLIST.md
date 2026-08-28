@@ -75,6 +75,6 @@ Captured from a cold boot on 2026-08-22 (`tools/capture_boot.py`):
 | Date | 2026-08-22 |
 | Core chosen | **Deferred.** `adafruit` is the default and is what was flashed and verified. The BLE-vs-display trade-off cannot be settled until Phase 2 (display) and Phase 4 (BLE) are attempted; the `mbed` environment is kept buildable so the choice stays open. |
 | Toolchain | PlatformIO 6.1.19, platform `maxgerhardt/platform-nordicnrf52`, framework `framework-arduinoadafruitnrf52-seeed 1.10101.0`, gcc-arm-none-eabi 7.2.1 |
-| Upload method | Serial DFU via nrfutil. UF2 drag-and-drop rejected as unreliable — the mass-storage drive did not remount after the first bootloader entry. |
+| Upload method | Serial DFU via nrfutil (primary). UF2 drag-and-drop also works and is now verified (2026-08-28) with a canonical-format UF2 — see `docs/SETUP.md`. |
 | Notes | Three real bugs found and fixed: nonexistent `D11`/`D16` macros, missing `Adafruit_TinyUSB.h` include causing link failure, and a blink/report phase-lock that made the LED state column useless. All are documented in `docs/SETUP.md`. |
 | Signed off | **Yes — 2026-08-22** |

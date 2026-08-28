@@ -69,6 +69,9 @@ $RECYCLE.BIN/
 /tmp/
 /scratch/
 
+# ---- Flash backup dumps (whole-flash, 1.9 MB; never commit) ----
+firmware/backups/
+
 # ---- Host test fixture ----
 # Build artifacts and generated PNGs are local-only; the fixture source (mocks,
 # harness, tests, CMake, vendored third-party) all live under firmware/test/ and

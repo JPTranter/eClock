@@ -210,7 +210,38 @@ When dealing with instant HardFaults (like the BLE crash), the board crashes bef
 
 ---
 
-## 6. Deprecated: `Seeed_GFX` library
+## 6. UF2 drag-and-drop: now verified working (verified 2026-08-28)
+
+**Update to sections 4/5:** the `XIAO-BOOT` mass-storage drive *does* work for UF2
+flashing on this machine, and the auto-reboot behavior is confirmed end-to-end.
+The earlier "not repeatable" notes referred to a different issue (the drive not
+remounting after a reset) — but when the drive is present, UF2 flashing works:
+
+- `D:/CURRENT.UF2` is the bootloader's dump of the **entire flash** (MBR +
+  SoftDevice S140 + bootloader + app). **Never copy over it.**
+- The bootloader accepts a UF2 and **auto-reboots into the app ~1 s after a
+  complete, valid write**. Filename does NOT matter (spec: only a file *named*
+  `CURRENT.UF2` is refused). The `rename to FLASH.UF2` advice is a myth.
+- The UF2 must be **canonical spec format**: 8-word header (familyID at byte 24,
+  target 0x27000), payload from byte 32, `magicEnd` at byte 508. The old
+  hex_to_uf2.py wrote a 36-byte variant (family at byte 32, magic-end at bytes
+  36-43, payload at 44) — the bootloader **ignored it** (file copied, no flash,
+  no reset). After fixing the converter to the canonical layout, the same image
+  flashed and rebooted first try.
+- Verified with `firmware/tools/uf2_flash.py` (backs up CURRENT.UF2, copies a
+  fresh UF2, watches for the app CDC to appear = flash+reboot confirmed).
+
+Restoring factory state: re-flash the bootloader from
+`backups/CURRENT.UF2.bak-*` (the 1.9 MB whole-flash dump).
+
+### Tooling notes
+- `firmware/tools/hex_to_uf2.py` now emits canonical UF2 (verified with the
+  bootloader on-device).
+- `firmware/tools/uf2_flash.py` = backup + copy + watch for auto-reboot. It
+  deletes a stale `FLASH.UF2` first (a leftover from a previous attempt makes
+  the FAT reject overwrites with `Errno 9`).
+
+## 7. Deprecated: `Seeed_GFX` library
 
 Not used in this project. It cannot do true partial updates (fails to push OLD_COLORS
 buffer, causing ghosting), force-sleeps the panel after every update (broken `wake()`

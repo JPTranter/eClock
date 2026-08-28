@@ -55,12 +55,24 @@ Your port numbers will differ. Do not assume COM6/COM11.
 
 ## 4. Flash
 
-**Use serial DFU. Do not rely on UF2 drag-and-drop.**
+**UF2 drag-and-drop now works (verified 2026-08-28)** — but only with a
+**canonical-format** UF2 (8-word header, `magicEnd` at byte 508). The repo's
+`hex_to_uf2.py` emits that format, and the bootloader flashes it and
+**auto-reboots into the app ~1 s after the copy completes** (verified on-wire).
 
-The bootloader presents a `XIAO-BOOT` mass-storage drive, and copying a `.uf2` onto it
-does work — but on this machine the drive mounted only on the *first* entry into the
-bootloader and never remounted on subsequent resets, while the DFU serial port
-appeared every time. Serial DFU is the repeatable path.
+Quickest path (board already in bootloader, drive = XIAO-BOOT):
+
+```bash
+cd firmware
+python tools/uf2_flash.py FIRMWARE.UF2     # backup + copy + watch for reboot
+```
+
+`uf2_flash.py` backs up `D:/CURRENT.UF2` (the whole-flash dump) to
+`firmware/backups/`, copies the UF2 as `FLASH.UF2`, and waits for the
+application CDC port to appear — which confirms the flash + auto-reboot.
+
+**Serial DFU** remains the most repeatable path overall (works even when the
+drive does not remount):
 
 Two steps:
 
