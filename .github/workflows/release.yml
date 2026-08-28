@@ -38,16 +38,17 @@ jobs:
 
       - name: Copy artifact to a versioned name + generate UF2
         run: |
-          mkdir -p release /tmp/uf2
+          mkdir -p release
           cp firmware/.pio/build/mbed/firmware.hex "release/eClock-${TAG}.hex"
           cp firmware/.pio/build/mbed/firmware.elf "release/eClock-${TAG}.elf"
           # Generate a .uf2 (drag-and-drop onto the XIAO-BOOT mass-storage drive)
-          # from the .hex. The app runs at 0x27000; nRF52840 family = 0xada52840.
-          # uf2conv.py requires uf2families.json to exist next to it.
-          curl -sSfL "https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2conv.py" -o /tmp/uf2/uf2conv.py
-          curl -sSfL "https://raw.githubusercontent.com/microsoft/uf2/master/utils/uf2families.json" -o /tmp/uf2/uf2families.json
-          python /tmp/uf2/uf2conv.py "release/eClock-${TAG}.hex" \
-            -o "release/eClock-${TAG}.uf2" -f 0xada52840 -b 0x27000 -c
+          # from the .hex with the repo's self-contained converter. The app runs
+          # at 0x27000; nRF52840 family = 0xada52840. (The microsoft/uf2 uf2conv
+          # -c path wrote the family ID into the fileSize slot and omitted the
+          # magic end, so the .uf2 did not flash; hex_to_uf2.py writes the header
+          # correctly.)
+          python firmware/tools/hex_to_uf2.py "release/eClock-${TAG}.hex" \
+            "release/eClock-${TAG}.uf2" --base 0x27000 --family 0xada52840
         env:
           TAG: ${{ steps.ver.outputs.tag }}
 
