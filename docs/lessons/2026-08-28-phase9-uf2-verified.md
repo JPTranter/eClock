@@ -41,29 +41,31 @@ auto-rebooted **on the first attempt**.
 
 ## The on-machine quirks that bit us
 
-1. **Stale `FLASH.UF2` on the drive breaks overwriting.** After one (ignored)
-   attempt, copying again failed with `OSError: [Errno 9] Bad file descriptor`.
-   Removing the stale file from the drive fixed it. The flash tool deletes a
-   pre-existing `FLASH.UF2` before copying.
-2. **The bootloader drive only mounts sometimes.** It mounted this session (so
-   we could test), but the old notes about it not remounting are still real on
-   this machine — serial DFU remains the most repeatable path overall.
-3. **The old `hex_to_uf2.py` wrote output to paths it could not create** (no
+1. **The bootloader's MSC drive crashes on ANY write on this machine (the big
+   one).** Both the Python streaming write and a native Windows robocopy made
+   the FAT volume disappear mid-copy and the device drop off USB entirely
+   (no port, no drive) — the UF2 file itself is fine (serial DFU of the same
+   image boots), but UF2 drag-and-drop is not reliable here. **Use serial DFU.**
+2. **A stale `FLASH.UF2` on the drive breaks overwriting** (`Errno 9` before the
+   crash was diagnosed) — but it turns out the write itself was crashing the
+   FAT, so removing the stale file only helped the first (non-crashing) attempt.
+3. **The bootloader drive only mounts sometimes** — real on this machine; serial
+   DFU is the repeatable path.
+4. **The old `hex_to_uf2.py` wrote output to paths it could not create** (no
    `build/` dir). Added `os.makedirs(dirname(out), exist_ok=True)`.
 
 ## New tool: firmware/tools/uf2_flash.py
 
-Backup + copy + verify in one command:
+Best-effort backup + copy + verify helper (use serial DFU for reliability):
 
 ```bash
 python tools/uf2_flash.py <file>.uf2
 ```
 
-1. Backs up `D:/CURRENT.UF2` (whole-flash) to `firmware/backups/`.
-2. Deletes any stale `FLASH.UF2` on the drive.
-3. Copies the .uf2 as `FLASH.UF2` (fsync'd).
-4. Watches for the app CDC port (PID 8045) to appear = flash + auto-reboot
-   confirmed. Exit 0 only on that.
+It backs up `D:/CURRENT.UF2` (whole-flash) to `firmware/backups/`, copies the
+.uf2 as `FLASH.UF2`, and watches for the app CDC (PID 8045) = flash + reboot.
+On this machine the MSC write crashes first, so the tool documents that caveat
+and defers to serial DFU.
 
 ## Release hygiene
 

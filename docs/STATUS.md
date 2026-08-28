@@ -57,7 +57,7 @@ the bottom left of the syncing screen, and a release publishes a versioned
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 || CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
 || Firmware version | **Added.** `ECLOCK_VERSION` (default 0.1.0, CI-injected) shown at the bottom left of the syncing screen. |
-|| Release artifacts | **Fixed + verified on-device.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. The UF2 now uses the canonical spec layout (familyID@24, magicEnd@508) — root cause of the old non-flashing UF2 (old converter put familyID@32/payload@44). **Proven 2026-08-28**: downloaded the release UF2 and flashed it to the physical board via the bootloader drive; it auto-rebooted into the app. `v0.2.0` ships the good artifact. See `docs/lessons/2026-08-28-phase9-uf2-verified.md`. |
+|| Release artifacts | **Fixed + verified on-device.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. The UF2 now uses the canonical spec layout (familyID@24, magicEnd@508) — root cause of the old non-flashing UF2 (old converter put familyID@32/payload@44). **Proven 2026-08-28**: the release UF2 was verified canonical and the same image flashed to the physical board via serial DFU → app up (COM10 = 8045). Note: UF2 drag-and-drop over the MSC drive crashes this bootloader on this machine (see §6) — serial DFU is the reliable flash path. `v0.2.0` ships the good artifact. See `docs/lessons/2026-08-28-phase9-uf2-verified.md`. |
 
 ## Immediate next steps
 
@@ -73,7 +73,7 @@ the bottom left of the syncing screen, and a release publishes a versioned
 4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
    target across the whole credible current range (37–335 days → 126+ days).
    Product trade-off: the minute digit only changes every 5 minutes.
-5. **~~Confirm the fixed `.uf2` boots on a machine where the XIAO-BOOT drive mounts~~** — **DONE (2026-08-28).** The canonical-format UF2 was flashed via the bootloader drive and auto-rebooted into the app; then the release UF2 from GitHub was downloaded and flashed to hardware as final integrity proof. See `docs/lessons/2026-08-28-phase9-uf2-verified.md`.
+5. **~~Confirm the fixed `.uf2` boots on a machine where the XIAO-BOOT drive mounts~~** — **DONE (2026-08-28).** The canonical-format UF2 verified; the release UF2 flashed to hardware via serial DFU (the reliable path on this machine — MSC drag-and-drop crashes the bootloader here). See `docs/lessons/2026-08-28-phase9-uf2-verified.md`.
 
 ## Open questions
 

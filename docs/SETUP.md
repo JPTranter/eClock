@@ -55,24 +55,14 @@ Your port numbers will differ. Do not assume COM6/COM11.
 
 ## 4. Flash
 
-**UF2 drag-and-drop now works (verified 2026-08-28)** — but only with a
-**canonical-format** UF2 (8-word header, `magicEnd` at byte 508). The repo's
-`hex_to_uf2.py` emits that format, and the bootloader flashes it and
-**auto-reboots into the app ~1 s after the copy completes** (verified on-wire).
+**Use serial DFU — UF2 drag-and-drop is unreliable on this machine.**
 
-Quickest path (board already in bootloader, drive = XIAO-BOOT):
+The canonical-format UF2 (8-word header, `magicEnd` at byte 508) is correct and
+flashes — but on this machine the bootloader's MSC drive crashes on ANY write
+(drive disappears mid-copy, device drops off USB), whether via Python, MSYS
+`cp`, or Windows robocopy. Serial DFU of the same firmware works every time.
 
-```bash
-cd firmware
-python tools/uf2_flash.py FIRMWARE.UF2     # backup + copy + watch for reboot
-```
-
-`uf2_flash.py` backs up `D:/CURRENT.UF2` (the whole-flash dump) to
-`firmware/backups/`, copies the UF2 as `FLASH.UF2`, and waits for the
-application CDC port to appear — which confirms the flash + auto-reboot.
-
-**Serial DFU** remains the most repeatable path overall (works even when the
-drive does not remount):
+**Serial DFU (the reliable path):**
 
 Two steps:
 

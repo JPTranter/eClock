@@ -176,21 +176,10 @@ cmake --build firmware/test/build --target coverage   # HTML in build/output/cov
 
 ### Flash the firmware
 
-Two proven paths — UF2 drag-and-drop (easiest) and serial DFU (most repeatable).
+Two paths — UF2 drag-and-drop (works on machines where the MSC write doesn't
+crash the bootloader) and serial DFU (the reliable path on this machine).
 
-**UF2 drag-and-drop** (bootloader drive = `XIAO-BOOT`, board in bootloader):
-
-```bash
-cd firmware
-python tools/uf2_flash.py <your>.uf2    # backs up, copies, confirms auto-reboot
-```
-
-The bootloader flashes a **canonical-format** UF2 (8-word header, familyID@24,
-magicEnd@508 — what the repo's `hex_to_uf2.py` emits) and **auto-reboots into
-the app ~1 s after the copy completes**. Filename does not matter (only
-`CURRENT.UF2` is refused — that's the whole-flash dump; never copy over it).
-
-**Serial DFU** (works even when the drive doesn't remount):
+**Serial DFU (reliable here):**
 
 ```bash
 cd firmware

@@ -7,6 +7,12 @@ application. The nRF52 UF2 bootloader resets ~1 s after a complete, valid UF2
 write (matching familyID); a rejected file (wrong familyID, bad magic, or a
 file named CURRENT.UF2) does NOT reset the board.
 
+CAVEAT (verified 2026-08-28): on THIS machine, the bootloader's FAT crashes on
+ANY write to the MSC drive — the drive disappears mid-copy and the device drops
+off USB (no port, no drive). The canonical UF2 itself is correct (serial DFU of
+the same image works and boots), but UF2 drag-and-drop is unreliable here. Use
+serial DFU (`pio run -t upload`) as the primary path; this tool is best-effort.
+
 Before copying, backs up D:/CURRENT.UF2 (the bootloader's dump of the ENTIRE
 flash: MBR + SoftDevice S140 + bootloader + app) to firmware/backups/ so the
 factory state can be restored with a bootloader re-flash if ever needed.

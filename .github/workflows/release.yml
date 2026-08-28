@@ -71,23 +71,15 @@ jobs:
             - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
 
             ### Flash it
-            **UF2 (easiest):**
-            1. Put the board in the bootloader (double-tap RESET, or
-               `python tools/reset_to_bootloader.py`).
-            2. Copy this `.uf2` onto the `XIAO-BOOT` drive (any name except
-               `CURRENT.UF2`). You can drag it in Explorer, or run the verified
-               helper:
-               ```
-               python firmware/tools/uf2_flash.py eClock-<tag>.uf2
-               ```
-            3. The bootloader flashes it and **auto-reboots into the app ~1 s
-               later** — nothing else needed. (Verified on device 2026-08-28.)
-
             **Serial DFU (reliable):**
-            1. Put the board into its bootloader (double-tap RESET, or run
+            1. Put the board into the bootloader (double-tap RESET, or run
                `python tools/reset_to_bootloader.py`).
             2. Upload with PlatformIO using the bootloader port:
                ```
                pio run -e mbed -t upload --upload-port <bootloader-port>
                ```
             3. See `docs/SETUP.md` for the full build / flash / monitor flow.
+
+            *UF2 drag-and-drop is also supported, but note: on some hosts (incl. this
+            dev machine) the bootloader's MSC drive crashes on write — use the `.hex`
+            + serial DFU for reliability.*
