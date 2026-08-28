@@ -57,7 +57,7 @@ the bottom left of the syncing screen, and a release publishes a versioned
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 || CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
 || Firmware version | **Added.** `ECLOCK_VERSION` (default 0.1.0, CI-injected) shown at the bottom left of the syncing screen. |
-|| Release artifacts | **Added; UF2 unverified.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. **The `.hex` (serial DFU) is the working flash path; the `.uf2` did not boot when flashed** — see `docs/lessons/LESSONS_LEARNT.md` §25. |
+|| Release artifacts | **Added; UF2 fixed.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. The UF2 bug was root-caused (uf2conv `-c` put the family ID in the fileSize slot and omitted the magic end) and corrected with `firmware/tools/hex_to_uf2.py`. Serial DFU of the `.hex` remains the proven flash path here (the XIAO-BOOT drive does not mount on this machine) — see `docs/lessons/LESSONS_LEARNT.md` §25. |
 
 ## Immediate next steps
 
@@ -73,9 +73,10 @@ the bottom left of the syncing screen, and a release publishes a versioned
 4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
    target across the whole credible current range (37–335 days → 126+ days).
    Product trade-off: the minute digit only changes every 5 minutes.
-5. **Investigate or drop the UF2 artifact** — the `v0.1.0` release `.uf2` did not
-   boot when flashed. Either make the `.uf2` flash correctly or stop publishing it and
-   document `.hex` (serial DFU) as the only flash path.
+5. **Confirm the fixed `.uf2` boots on a machine where the XIAO-BOOT drive mounts**
+   — the root cause (uf2conv `-c` header bug) is fixed and the converter is verified, but
+   drag-and-drop UF2 can't be exercised on this machine (the bootloader drive does not
+   mount here), so the new `.uf2` remains to be proven by an actual copy+reboot.
 
 ## Open questions
 

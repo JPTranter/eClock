@@ -1129,25 +1129,31 @@ drag-and-drop flashing. It needs two numbers:
 Command used in the release workflow:
   `python uf2conv.py <firmware.hex> -o <firmware.uf2> -f 0xada52840 -b 0x27000 -c`.
 
-### The release UF2 did NOT flash (verified 2026-08-27)
+### The release UF2 did NOT flash — root-caused and fixed (2026-08-27)
 
 The `v0.1.0` release `.uf2` (734 KB, built with `-b 0x27000 -f 0xada52840`) **did not
-boot** when dragged onto the bootloader / flashed. The `.hex` via serial DFU is what
-actually works. The `.uf2` was syntactically valid and non-empty, but the device
-did not run it.
+boot**. Inspecting the block headers showed the cause: **uf2conv.py `-c` wrote the
+family ID (`0xada52840`) into the `fileSize` header slot and omitted the magic-end
+fields** — so the block header was malformed and the bootloader rejected it. It was
+non-empty and "looked" like a UF2 (magicStart present) but the header fields were in
+the wrong places. This is the classic artifact that **only "doesn't boot" rather than
+failing loudly** — a linter/parse would pass it.
+
+**Fix:** `firmware/tools/hex_to_uf2.py` — a self-contained Intel HEX → UF2 converter that
+writes the header correctly (`fileSize` = real image size, `familyID` in its own slot,
+valid `magicEnd0/1`). Verified: 1436 contiguous blocks, all magic valid, at base
+`0x27000` / family `0xada52840`. The release workflow now uses this instead of
+downloading `uf2conv.py`.
 
 **Takeaways:**
-- **Treat the `.uf2` as unverified.** Size + a successful build do not prove a UF2
-  boots; only flashing proves it. Until a UF2 is confirmed to boot, publish the
-  **`.hex`** as the primary flash artifact and serial DFU as the documented path.
-- **The `-c` (convert) flag** makes uf2conv convert the *family* block in place; the
-  resulting `.uf2` can still be wrong if the bootloader expects a different layout. This
-  is exactly the kind of artifact that only "doesn't boot" rather than failing loudly.
-- **Re-enable `uf2families.json`** — uf2conv.py's `load_families()` opens a
-  `uf2families.json` next to the script; without it the conversion crashes (the first
-  release run failed on this before I added the file).
-- **Do not trust a generated artifact without a hardware smoke test.** The release
-  pipeline validates *build*, not *flashing*.
+- **Inspect a generated flash artifact's header, not just its size.** A valid
+  `magicStart` does not mean the rest of the block header is right. Parse the `fileSize`
+  and `magicEnd` fields.
+- **Do not trust a generated artifact without a hardware smoke test.** "Built + non-empty
+  + valid magic" is not "boots". The release pipeline validates *build*, not *flashing*.
+- **Prefer a small, understood, self-contained converter** over downloading a generic
+  tool with modes you don't control. `uf2conv.py -c` is the trap; writing 80 lines you
+  can verify beats guessing at a tool's semantics.
 
 The reliable path on this machine is serial DFU of the `.hex` (the bootloader's
 XIAO-BOOT drive does not remount dependably). The `.uf2` is a convenience that has not
