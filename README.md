@@ -140,6 +140,28 @@ a weekly reminder) via a separate additive characteristic, configured with a
 All steps work from a plain shell (PowerShell on Windows 11, or any POSIX shell) with
 no IDE required. Windows-specific notes are inline.
 
+### Exploring the codebase with CodeGraph (optional)
+
+This repository supports [CodeGraph](https://github.com/colbymchenry/codegraph)
+for source-code discovery. Developers and coding agents should use it first when it is
+available for repository summaries, architecture exploration, symbol lookup, call
+relationships, change-impact analysis, and affected-test discovery. It is optional:
+direct source and documentation inspection remains the fallback.
+
+```bash
+codegraph status .                                      # check index availability/freshness
+codegraph sync .                                        # update a stale index
+codegraph files -p . --format grouped                   # indexed source structure
+codegraph explore -p . --max-files 12 "BLE sync flow"  # source plus relationships
+codegraph query -p . "startSyncAttempt"                # find a symbol
+codegraph node -p . "startSyncAttempt"                 # source and caller/callee trail
+```
+
+CodeGraph indexes code and selected configuration files, not the complete prose docs
+or generated artifacts. Pair its results with `README.md`, `docs/STATUS.md`, the
+relevant design documents, and Git/filesystem inspection. Repository-specific agent
+instructions and further commands are in [`AGENTS.md`](AGENTS.md).
+
 ### Prerequisites
 
 - **PlatformIO Core** (`pip install platformio`, then `pio --version`).

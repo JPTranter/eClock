@@ -1680,3 +1680,69 @@ The generated header now carries its own metrics so callers don't hardcode them:
 - Keep per-font "squish/stretch/colon" decisions in the generator options + header, never
   hand-edit per font. The visual-fit numbers (fill %, margins) in the docs are per-font;
   don't assume a squish recipe generalises (Chango needed -8px; Chewy needs 0).
+
+---
+
+## 35. Use CodeGraph first for source discovery, then verify its boundaries (verified 2026-08-29)
+
+A repository summary was initially assembled by reading Git's file list and the main
+prose documents even though this checkout already had an up-to-date CodeGraph index.
+That missed the fastest route to the code's actual symbol and relationship structure.
+The repo now has `AGENTS.md` guidance and a CodeGraph quick-start in `README.md` so the
+index is checked before manually walking source.
+
+### Start by checking availability and freshness
+
+```bash
+codegraph status .
+```
+
+For this checkout, CodeGraph v1.6.0 reported an up-to-date index containing 65 files,
+940 nodes, and 2,254 edges. If the status says the index is stale, run
+`codegraph sync .` before relying on it. If the command or index is unavailable, fall
+back to direct source, docs, Git, and filesystem inspection rather than blocking.
+
+### Broad natural-language context can be low-confidence
+
+A broad `codegraph context` request for "architecture, runtime, tests, integrations and
+tooling" matched generic words and returned battery-test functions as entry points.
+CodeGraph explicitly labelled that result low-confidence. The reliable workflow was:
+
+1. Use `codegraph files -p . --format grouped` to establish indexed structure.
+2. Use `codegraph query -p . "<exact symbol>"` to locate entry points such as `loop`,
+   `setup`, `async_setup`, and `async_perform_sync`.
+3. Use `codegraph node -p . "<symbol>"` to read current source plus caller/callee trails.
+4. Use a narrowly-worded `codegraph explore` query for one subsystem at a time.
+5. Verify important claims against the returned source and relevant documentation.
+
+**Lesson:** treat a low-confidence semantic match as a lead, not as a repository
+summary. Exact symbols and focused subsystem queries produce much stronger evidence.
+
+### The graph is source intelligence, not the whole repository
+
+The index covers C/C++, Python, and selected YAML/configuration files. It does not
+represent all Markdown documentation, screenshots, generated build artifacts, or every
+tracked file. Therefore a complete summary still needs:
+
+- `README.md`, `docs/STATUS.md`, and relevant design docs for intent, hardware evidence,
+  current phase, and known gaps;
+- Git for tracked-file counts, history, and working-tree state;
+- filesystem/build inspection for generated outputs and local artifacts.
+
+**Lesson:** CodeGraph should be the first tool for code architecture and relationships,
+but it complements rather than replaces prose docs and repository-state tools.
+
+### Confirm which CodeGraph implementation is installed
+
+The `codegraph` executable in this environment is the npm package
+`@colbymchenry/codegraph`, not similarly named CodeGraph projects. Before linking docs
+or copying commands from the web, verify the installed package and CLI help:
+
+```bash
+codegraph version
+codegraph --help
+npm view @colbymchenry/codegraph repository.url
+```
+
+This prevents documenting a different product whose commands happen to have a similar
+name.
