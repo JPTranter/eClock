@@ -48,42 +48,41 @@ adapter or ESPHome Bluetooth proxy within range of the clock.
 
 Since HA v0.2.0, the component can push a short text message that the clock displays
 on the bottom row (e.g. holiday greetings, a birthday). Configure a `messages:` list;
-each entry is EITHER date-based or weekday-based:
+each entry is a `message` with a `day` rule in one of these natural forms:
 
 ```yaml
 epaper_clock:
   mac_addresses:
     - "AA:BB:CC:DD:EE:FF"
   messages:
-    # Annual events: NO year -> fires every year on (month, day).
+    # DEFAULT: no rule -> shown whenever nothing more specific matches.
+    - message: "God is good"
+    # WEEKLY: a weekday name -> fires every week on that day (fallback).
+    - message: "Thank God it's Friday!"
+      day: Fri
+    # ANNUAL: "day month" -> fires every year on that date.
     - message: "Merry Christmas"
-      month: 12
-      day: 25
-    - message: "Happy New Year"
-      month: 1
-      day: 1
-    # One-off: include a year -> fires only on that exact date.
+      day: 25 Dec
+    # ONE-OFF: "day month year" -> fires only on that exact date (takes precedence).
     - message: "Happy Birthday Sam"
-      month: 3
-      day: 14
-      year: 2026
-    # Weekly: a weekday (0=Monday .. 6=Sunday) -> fires every week on that day.
-    # This is a FALLBACK: a date-based message that matches today overrides it.
-    - message: "God is good, go to church!"
-      weekday: 6
+      day: 14 Mar 2026
 ```
+
+`day` accepts a weekday name (`Sun`/`Mon`/`Tue`/`Wed`/`Thu`/`Fri`/`Sat`, or the full
+name) or a date in `day month` (annual) / `day month year` (one-off) form. It is
+case-insensitive. The older explicit keys (`month`, `day`, `year`, `weekday`) also
+still work.
 
 Behaviour:
 - The message is selected by **Home Assistant's local date** (so it follows HA's
   timezone, matching the date the clock shows).
-- **Precedence:** a date-based message (`month`/`day`, with optional `year`) that
-  matches today **wins** over a weekday message. If no date rule matches, the
-  weekday message for today's weekday is shown as the fallback.
-- If **two** entries match the same day/weekday, the **last one in the list** wins —
-  so a specific `year`-scoped entry listed after an annual one overrides it that
-  year.
-- If **no** entry matches today, an all-NUL payload is written so the clock clears
-  the line (shows its normal clock face).
+- **Precedence** (highest → lowest):
+  1. A **one-off** (`day month year`) or **annual** (`day month`) that matches today.
+     Among date entries, the **last in the list** wins.
+  2. A **weekday** message matching today's weekday (fallback). Last in list wins.
+  3. A **default** message (no rule) — shown when nothing above matches.
+- If **no** entry applies at all, an all-NUL payload is written so the clock clears the
+  line (shows its normal clock face).
 - Messages are **truncated to 30 characters** on the HA side before sending (the
   clock also clamps defensively), so the text never collides with the AM/PM display.
 - The message is sent on a **separate** characteristic (`c0dec10c-2a2c-4a20-8c10-000000000000`),

@@ -111,18 +111,18 @@ def test_parse_messages_with_year():
 
 
 def test_parse_messages_skips_invalid():
-    # Missing message / month / day -> skipped; valid ones kept.
+    # Messages without a text are skipped; a text-only entry becomes a DEFAULT.
     msgs = parse_messages(
         [
             {"message": "OK", "month": 5, "day": 10},
-            {"message": "", "month": 5, "day": 10},        # empty text
-            {"month": 5, "day": 10},                        # no message
-            {"message": "No date"},                         # no month/day
+            {"message": "", "month": 5, "day": 10},        # empty text -> skipped
+            {"month": 5, "day": 10},                        # no message -> skipped
+            {"message": "Everyday"},                        # no rule -> default
         ]
     )
-    assert len(msgs) == 1
-    assert msgs[0].message == "OK"
-    assert msgs[0].year is None
+    assert len(msgs) == 2
+    assert msgs[0].message == "OK" and msgs[0].year is None
+    assert msgs[1].is_default is True
 
 
 def test_parse_messages_empty_or_none():
@@ -192,3 +192,161 @@ def test_weekday_mixed_with_date_last_wins_within_group():
     assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "One-off B"
     # 28 Jun 2024: no date match -> weekday.
     assert select_message(msgs, month=6, day=28, year=2024, weekday=4) == "Thank God it's Friday!"
+
+
+# ---- weekday as a NAME in config (day: Fri) ---------------------------------
+
+def test_day_accepts_weekday_name():
+    # The user-friendly config: day: Fri (no month) -> weekday-based rule.
+    msgs = parse_messages([{"message": "Thank God it's Friday!", "day": "Fri"}])
+    assert len(msgs) == 1
+    assert msgs[0].is_date_based is False
+    assert msgs[0].weekday == 4  # Friday
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "Thank God it's Friday!"
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=5) is None
+
+
+def test_day_accepts_all_weekday_names():
+    names = {
+        "Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6,
+    }
+    for name, wd in names.items():
+        msgs = parse_messages([{"message": name, "day": name}])
+        assert len(msgs) == 1, name
+        assert msgs[0].weekday == wd, name
+        assert msgs[0].month is None, name
+
+
+def test_day_weekday_name_is_case_insensitive():
+    for name, wd in [("fri", 4), ("FRI", 4), ("Fri", 4), ("saturday", 5), ("sun", 6)]:
+        msgs = parse_messages([{"message": name, "day": name}])
+        assert len(msgs) == 1
+        assert msgs[0].weekday == wd
+
+
+def test_day_numeric_with_month_is_still_date_based():
+    # A numeric day WITH a month remains a date-based rule (unaffected).
+    msgs = parse_messages([{"message": "Merry Christmas", "month": 12, "day": 25}])
+    assert msgs[0].is_date_based is True
+    assert msgs[0].month == 12 and msgs[0].day == 25 and msgs[0].year is None
+
+
+def test_invalid_weekday_name_is_skipped():
+    # A day that's neither a weekday name nor a usable rule (no month) -> skipped.
+    msgs = parse_messages([{"message": "Bad", "day": "Funday"}])
+    assert msgs == []
+
+
+# ---- natural day:string forms ----------------------------------------------
+# day: "Mon"/"Monday" (weekly) | day: "23 Jun" (annual) | day: "23 Jun 2026" (one-off)
+
+def test_day_string_forms():
+    # 1) weekday name only -> weekly
+    m1 = parse_messages([{"message": "TGIF", "day": "Fri"}])[0]
+    assert m1.weekday == 4 and m1.is_date_based is False
+
+    # 2) "day month" -> annual (fires every year)
+    m2 = parse_messages([{"message": "Xmas", "day": "25 Dec"}])[0]
+    assert m2.is_date_based is True
+    assert (m2.day, m2.month, m2.year) == (25, 12, None)
+
+    # 3) "day month year" -> one-off specific date
+    m3 = parse_messages([{"message": "Wedding", "day": "14 Mar 2026"}])[0]
+    assert m3.is_date_based is True
+    assert (m3.day, m3.month, m3.year) == (14, 3, 2026)
+
+
+def test_day_string_forms_are_case_insensitive():
+    variants = [
+        ("fri", 4, None, None, None),
+        ("Friday", 4, None, None, None),
+        ("25 dec", None, 25, 12, None),
+        ("25 DEC", None, 25, 12, None),
+        ("14 Mar 2026", None, 14, 3, 2026),
+    ]
+    for raw, wd, d, mo, yr in variants:
+        m = parse_messages([{"message": raw, "day": raw}])[0]
+        assert m.weekday == wd, raw
+        if wd is None:
+            assert (m.day, m.month, m.year) == (d, mo, yr), raw
+
+
+def test_day_string_forms_parse_into_selectable():
+    msgs = parse_messages(
+        [
+            {"message": "TGIF", "day": "Fri"},
+            {"message": "Xmas", "day": "25 Dec"},
+            {"message": "Wedding", "day": "14 Mar 2026"},
+        ]
+    )
+    # Weekly fires on a matching Friday (no date override).
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "TGIF"
+    # Annual fires on its month/day any year.
+    assert select_message(msgs, month=12, day=25, year=2025, weekday=4) == "Xmas"
+    # One-off fires only on its exact date.
+    assert select_message(msgs, month=3, day=14, year=2026, weekday=6) == "Wedding"
+    # 14 Mar 2027 is a Friday; with no date match the TGIF weekday message shows.
+    assert select_message(msgs, month=3, day=14, year=2027, weekday=4) == "TGIF"
+    # On a non-Friday with no date match, nothing shows.
+    assert select_message(msgs, month=3, day=15, year=2027, weekday=1) is None
+    # The more specific one-off (Wedding, 14 Mar 2026) wins over an annual on that date.
+    specific = parse_messages(
+        [
+            {"message": "Annual Mar", "day": "14 Mar"},
+            {"message": "Wedding", "day": "14 Mar 2026"},
+        ]
+    )
+    assert select_message(specific, month=3, day=14, year=2026, weekday=4) == "Wedding"
+
+
+def test_day_string_invalid_is_skipped():
+    for bad in ["32 Dec", "13 Foo", "25", "2026"]:
+        msgs = parse_messages([{"message": "Bad", "day": bad}])
+        assert msgs == [], bad
+
+
+# ---- default message (no day rule) -----------------------------------------
+# A plain `message` with no day/weekday is the LOWEST-precedence fallback: shown
+# when no date-based and no weekday-based message applies.
+
+def test_default_message_is_used_only_when_nothing_else_matches():
+    msgs = parse_messages(
+        [
+            {"message": "God is good"},
+            {"message": "TGIF", "day": "Fri"},
+            {"message": "Xmas", "day": "25 Dec"},
+        ]
+    )
+    # A non-Friday with no date match -> default.
+    assert select_message(msgs, month=3, day=15, year=2027, weekday=1) == "God is good"
+    # A Friday with no date match -> weekday wins over default.
+    assert select_message(msgs, month=3, day=19, year=2027, weekday=4) == "TGIF"
+    # Christmas -> date wins over weekday and default.
+    assert select_message(msgs, month=12, day=25, year=2027, weekday=6) == "Xmas"
+
+
+def test_default_message_last_default_wins():
+    msgs = parse_messages([{"message": "First"}, {"message": "Second"}])
+    assert select_message(msgs, month=1, day=1, year=2027, weekday=1) == "Second"
+
+
+def test_default_message_is_lowest_precedence_over_weekday():
+    msgs = parse_messages(
+        [
+            {"message": "Fallback"},
+            {"message": "Church day", "day": "Sun"},
+        ]
+    )
+    # Sunday -> weekday wins.
+    assert select_message(msgs, month=1, day=3, year=2027, weekday=6) == "Church day"
+    # Monday -> default.
+    assert select_message(msgs, month=1, day=4, year=2027, weekday=0) == "Fallback"
+
+
+def test_default_message_only_no_rules():
+    msgs = parse_messages([{"message": "Always shown"}])
+    assert len(msgs) == 1
+    # With a weekday provided but nothing matching, default shows.
+    assert select_message(msgs, month=1, day=1, year=2027, weekday=3) == "Always shown"
+    # Even when select_message is called without a weekday (date-only path), default shows.
+    assert select_message(msgs, month=1, day=1, year=2027) == "Always shown"
