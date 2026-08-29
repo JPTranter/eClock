@@ -3,7 +3,7 @@
 Update this file at the end of each development session. It is the single place to
 look to answer "where is this project actually up to?"
 
-Last updated: 2026-08-27
+Last updated: 2026-08-29
 
 ## Current phase
 
@@ -33,6 +33,20 @@ a pre-commit gitleaks secret scanner + GitHub Actions (build, host tests +
 coverage, release artifacts) were added, the firmware now shows its version at
 the bottom left of the syncing screen, and a release publishes a versioned
 .hex/.uf2/.elf for direct device flashing.**
+**2026-08-29: system-design docs + a real state-machine bug fix.** Added a dedicated
+[state-machine design document](docs/design/state-machine.md) — the single reference a
+new engineer reads to understand the five states (SYNCING/RUNNING/RESYNCING/NO_TIME/
+SLEEPING), every transition and trigger, the interactions with BLE/buttons/battery/
+power, and where it's tested. It ships a rendered Mermaid diagram
+(`docs/design/state-machine.png`, source `.mmd`, regenerated with the globally-installed
+`mmdc`). **Fixed a hardware-observed bug:** a failed re-sync immediately re-entered
+`RESYNCING` (a tight retry loop that kept the radio advertising and drained the
+battery — seen on a bedside clock as the sync icon re-appearing every minute). The
+clock now backs off a full hour after a failure; a button press still forces an
+immediate re-sync. Fixed via TDD (regression test written first, seen red, then green).
+Also resolved the Windows host-test environment: the MinGW runtime DLLs are now bundled
+next to the test executables by CMake, so `ctest` runs from a clean shell (all 9 suites
+pass), and the tooling/rendering notes are captured in LESSONS_LEARNT §28–§30.
 
 ## Honest state of play
 
@@ -46,12 +60,14 @@ the bottom left of the syncing screen, and a release publishes a versioned
 || Pinout / board traps | **Verified.** Second board confirmed identical (XIAO nRF52840 Plus + EN05, Seeed bootloader PID 0x0064). |
 || Display driver approach | **Verified.** Font baseline variance now caught by tooling. Colon centering automated. |
 || Power management | **Phase 3 complete — budget now modelled.** Full six-term power model written (`docs/research/power-budget-analysis.md`). Key finding: 3 months not guaranteed at 1-min refresh without measured currents. |
-|| BLE time sync (device side) | **Verified.** MAC address now shown on sync screen for HA configuration. |
+|| BLE time sync (device side) | **Verified.** MAC address now shown on sync screen for HA configuration. Re-sync backs off a full hour after a failed attempt (fixed 08-29). |
 || BLE time sync (HA side) | **Verified.** |
 || Font tooling | **Hardened.** `fix` command normalises yOffsets. Sprite auto-sizes cells for any font. |
 || Power budget | **Modelled but unmeasured.** `docs/research/power-budget-analysis.md` — the project's #1 risk now has a reproducible model. Ready for bench measurement. |
 || Enclosure | Notes only, no CAD |
-|| Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. |
+|| Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. **Windows env fixed (08-29):** the MinGW runtime DLLs are bundled next to the test exes by CMake, so `ctest` runs from a clean shell — all 9 suites pass with no PATH setup. |
+| State-machine design | **Added.** `docs/design/state-machine.md` — five states, full transition table, subsystem interactions, test pointers, plus a rendered Mermaid diagram. |
+| Re-sync backoff bug | **Fixed (08-29, via TDD).** A failed re-sync no longer immediately re-enters RESYNCING (which drained the battery); it backs off a full hour. Regression test `FailedResyncBacksOffFullHourInsteadOfImmediateRetry` written first. |
 || Low-battery warning | **Verified.** ≤20% empty icon, ≤5% final "LOW BATTERY" screen; USB (VBUS) correctly does not trigger it. |
 || Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
@@ -61,19 +77,23 @@ the bottom left of the syncing screen, and a release publishes a versioned
 
 ## Immediate next steps
 
-1. **Measure power consumption on the bench** — three measurements close the
+1. **Confirm the re-sync backoff fix on hardware** — the failed-sync retry-loop fix is
+   committed and unit-tested, but not yet flashed to the bedside clock. Flash and
+   observe that the sync icon no longer re-appears every minute when Home Assistant is
+   unreachable.
+2. **Measure power consumption on the bench** — three measurements close the
    37–335 day range: full-board idle current (WFE), partial-refresh peak/avg
    current, and SSD1680 idle current with rail on. Methodology in
    `docs/research/power-budget-analysis.md`.
-2. **Decide on daytime full refresh** — the firmware does zero full refreshes
+3. **Decide on daytime full refresh** — the firmware does zero full refreshes
    between 05:00 and 23:00. The ghosting test only validated 53 partials; 1080/day
    is unvalidated. Adding one hourly full refresh costs ~0.01 mAh/day (negligible).
-3. **Begin enclosure design** — OnShape, accessible charge port, display
+4. **Begin enclosure design** — OnShape, accessible charge port, display
    window, wall-mount and desk-stand options. See `docs/enclosure/DESIGN_NOTES.md`.
-4. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
+5. **Decide refresh interval** — 5-minute refresh comfortably clears 3-month
    target across the whole credible current range (37–335 days → 126+ days).
    Product trade-off: the minute digit only changes every 5 minutes.
-5. **~~Confirm the fixed `.uf2` boots on a machine where the XIAO-BOOT drive mounts~~** — **DONE (2026-08-28).** The canonical-format UF2 verified; the release UF2 flashed to hardware via serial DFU (the reliable path on this machine — MSC drag-and-drop crashes the bootloader here). See `docs/lessons/2026-08-28-phase9-uf2-verified.md`.
+6. **~~Confirm the fixed `.uf2` boots on a machine where the XIAO-BOOT drive mounts~~** — **DONE (2026-08-28).** The canonical-format UF2 verified; the release UF2 flashed to hardware via serial DFU (the reliable path on this machine — MSC drag-and-drop crashes the bootloader here). See `docs/lessons/2026-08-28-phase9-uf2-verified.md`.
 
 ## Open questions
 

@@ -86,7 +86,7 @@ Next to the icon is a small two-digit time (e.g. `09:41`) — that's the time of
 | --- | --- |
 | **A white circle with a tick / check mark** | Sync is good. The clock has the correct, up-to-date time. This is the normal "happy" state — you'll see this almost all the time. |
 | **A pair of circular arrows** | The clock is syncing right now — it's talking to Home Assistant for the correct time. |
-| **A circle with an X / cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry on its own. |
+| **A circle with an X / cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry once an hour on its own (or immediately if you press a button). |
 
 ---
 
@@ -188,7 +188,7 @@ ahead or drift, it just waits patiently.
 | Symptom | What it means | What to do |
 | --- | --- | --- |
 | Shows "No Time!" | Home Assistant hasn't sent a time yet | Press any button to retry; check HA pairing. |
-| Cross icon (sync failed) | It couldn't reach HA for an update | Make sure HA is on and within Bluetooth range; it retries automatically. |
+| Cross icon (sync failed) | It couldn't reach HA for an update | Make sure HA is on and within Bluetooth range; it retries once an hour automatically (press a button for an immediate retry). |
 | Empty-battery icon + low % | Battery is low | Charge the clock (see **Charging**). |
 | "LOW BATTERY" screen | Battery is nearly dead | **Charge now** — this screen stays until you do. |
 | Bolt icon, no % | It's plugged in / charging | That's normal — it's on the charger. |
