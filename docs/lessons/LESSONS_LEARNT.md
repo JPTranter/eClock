@@ -1544,3 +1544,40 @@ until it looked right. Each was a real bug, not a style preference.
 > left / icons at the bottom left" descriptions, verified 2026-08-23/24) describe the
 > PREVIOUS layout and are superseded by this rework — sync status is now a single
 > right-aligned group at the top, and the bottom row holds the message.
+
+---
+
+## 32. Screenshots went stale because some test binaries weren't rebuilt — and the fix (verified 2026-08-29)
+
+The `docs/screenshots/` images are produced by **two different host-test executables**:
+- `test_display.exe` — drives the **main.cpp harness** and dumps the "real" screens
+  (`running`, `syncing`, `no_time`, `sleeping`, `running_usb`, `running_low_battery`,
+  `low_battery`).
+- `test_clock_display.exe` — drives the **pure `clock_display` module** and dumps the
+  `cd_*` renders (`cd_running_message`, the `cd_state_*` matrix pieces).
+
+When a render bug was fixed and re-verified, I rebuilt **`test_clock_display`** (which
+produced the state matrix I was checking) and copied *its* renders — but I had not rebuilt
+**`test_display`**, so the "real" screenshots I copied were still from the OLD binary. The
+result: `running_usb.png` showed the stale 24px sync-icon→bolt whitespace even though the
+source code had the fix. The fix was in the source, verified in the matrix, but the
+harness-driven PNG was stale.
+
+**Root cause:** `cmake --build <dir> --target <one-exe>` only rebuilds/reruns that one
+target. The PNGs live on disk in `output/` and are copied to `docs/` — so stale files
+persist until *their* producer is rebuilt. There is no "the screenshots are the current
+code" invalidation.
+
+**The fix:** a one-shot script, `firmware/tools/regenerate_docs_screenshots.py`, that
+rebuilds ALL targets, runs BOTH PNG-producing suites, applies the correct mapping
+(including `sleep_icon.png -> sleeping.png` and `cd_running_message.png -> message.png`),
+assembles the state-matrix composite, and verifies every docs-referenced image is present
+and 296×128. Use it instead of manually rebuilding a single target + copying.
+
+**Lessons:**
+- If a docs image depends on a render, regenerate the **producer binary** (and rebuild it),
+  not just the one you happen to be looking at. `--target <exe>` hides that.
+- Prefer a single "regenerate all artifacts" entry point over ad-hoc copy steps, so the
+  set can't drift.
+- Two harness screens can share a name but differ: `output/sleeping.png` (defensive Zzz
+  only) vs `output/sleep_icon.png` (overnight Zzz + "Sleeping"); the docs want the latter.

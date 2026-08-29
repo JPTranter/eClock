@@ -53,6 +53,14 @@ cmake --build firmware/test/build
 ctest --test-dir firmware/test/build --output-on-failure
 ```
 
+To refresh every documentation screenshot from the current firmware in one shot
+(rebuilds, runs the PNG-producing suites, applies the `sleep_icon`/`message` mapping,
+assembles the state matrix, and verifies all images), run:
+
+```bash
+python firmware/tools/regenerate_docs_screenshots.py
+```
+
 ## Before writing display code — read the board traps
 
 Read `docs/hardware/PINOUT.md` first. Two things will cost you an evening if you skip

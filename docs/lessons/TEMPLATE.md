@@ -34,24 +34,21 @@
 ## Docs maintenance checklist (do this whenever docs change)
 
 - **Regenerate screenshots.** Any change to a screen renderer, font, icon, version
-  text, or layout invalidates `docs/screenshots/*.png`. Regenerate them with the host
-  test harness from current firmware:
+  text, or layout invalidates `docs/screenshots/*.png`. Regenerate them ALL at once so
+  they can't drift out of sync, using the one-shot script:
+  ```bash
+  python firmware/tools/regenerate_docs_screenshots.py
   ```
-  cd firmware/test
-  PATH="<mingw64>/bin:$PATH" ctest --test-dir build -R test_display --output-on-failure
-  # then copy firmware/test/output/<screen>.png -> docs/screenshots/<screen>.png
-  ```
-  Verify with `md5sum` that each `docs/screenshots/*.png` matches
-  `firmware/test/output/*.png`; commit the refresh in the same commit as the doc change.
-  **Watch the two sleep images:** `output/sleeping.png` is the *defensive* STATE_SLEEPING
-  placeholder (Zzz only, from `drawSleepingScreen()`), while `output/sleep_icon.png` is
-  the *real overnight* screen left on the panel at bedtime (Zzz + "Sleeping", from
-  `drawSleepIcon()`). `docs/screenshots/sleeping.png` must be the **overnight** screen
-  (`sleep_icon.png`), since `docs/USER_GUIDE.md` describes it as "Zzz" with *Sleeping*
-  beneath it.
-  **The message render:** `docs/screenshots/message.png` is produced by the
-  `BottomMessageRenders` test in `test_clock_display.cpp` (`output/cd_running_message.png`);
-  if you change the bottom-message layout, regenerate it too.
+  (Needs the host test fixture built once — `cmake -S firmware/test -B firmware/test/build
+  -G Ninja && cmake --build firmware/test/build` — and Pillow for the state-matrix
+  composite, which is skipped with a warning if Pillow isn't installed.) The script
+  rebuilds, runs the two PNG-producing suites, applies the correct mapping
+  (including `sleep_icon.png -> sleeping.png` and `cd_running_message.png -> message.png`),
+  assembles the state matrix, and verifies every docs-referenced image is present and
+  296x128. Always commit the refreshed screenshots in the same commit as the doc change.
+  **The two sleep images:** `output/sleeping.png` is the *defensive* STATE_SLEEPING
+  placeholder (Zzz only), while `output/sleep_icon.png` is the *real overnight* screen
+  (Zzz + "Sleeping"). `docs/screenshots/sleeping.png` must be the overnight render.
 - **Keep pin numbers in sync.** `docs/hardware/PINOUT.md` and `docs/lessons/*` both
   document the pin mapping. When `firmware/include/board_pins.h` changes, update every
   table/note that mentions `EPD_CS`/`EPD_DC`/`EPD_RST`/`EPD_BUSY`/`EPD_POWER` in both.
