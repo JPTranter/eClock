@@ -176,8 +176,9 @@ cmake --build firmware/test/build --target coverage   # HTML in build/output/cov
 
 ### Flash the firmware
 
-Two paths — UF2 drag-and-drop (works on machines where the MSC write doesn't
-crash the bootloader) and serial DFU (the reliable path on this machine).
+Two paths:
+1. **UF2 drag-and-drop:** Double-tap RESET to mount the `XIAO-BOOT` drive, and copy the `.uf2` file over. **CRITICAL:** The bootloader's FAT16 filesystem does not support Long File Names (LFN). Copying a file with a name longer than 8.3 characters (like `eClock-v0.1.0.uf2`) will crash the bootloader mid-transfer. The GitHub releases provide an 8.3 compliant `ECLOCK.UF2` to avoid this.
+2. **Serial DFU:** (Alternative reliable path).
 
 **Serial DFU (reliable here):**
 

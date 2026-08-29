@@ -55,12 +55,16 @@ Your port numbers will differ. Do not assume COM6/COM11.
 
 ## 4. Flash
 
-**Use serial DFU — UF2 drag-and-drop is unreliable on this machine.**
+**UF2 Drag-and-Drop (Requires 8.3 filename):**
 
-The canonical-format UF2 (8-word header, `magicEnd` at byte 508) is correct and
-flashes — but on this machine the bootloader's MSC drive crashes on ANY write
-(drive disappears mid-copy, device drops off USB), whether via Python, MSYS
-`cp`, or Windows robocopy. Serial DFU of the same firmware works every time.
+The bootloader's tiny simulated FAT16 mass storage drive does not fully implement Long File Names (LFN). If you copy a UF2 file with a long name (like `eClock-v0.1.0.uf2`), Windows attempts to write VFAT LFN directory entries, which crashes the bootloader (the drive disconnects mid-transfer, yielding a "device which does not exist" error).
+
+To flash via UF2 drag-and-drop:
+1. Double-tap the RESET button to mount the `XIAO-BOOT` drive.
+2. **Rename the file to an 8.3-compliant name** (e.g., `ECLOCK.UF2`) *before* copying.
+3. Drag and drop it to the drive. The bootloader will reboot into the app automatically.
+
+*(Note: The GitHub Release workflow now automatically produces `ECLOCK.UF2` to avoid this).*
 
 **Serial DFU (the reliable path):**
 

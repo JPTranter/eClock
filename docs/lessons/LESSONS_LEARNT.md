@@ -1220,3 +1220,9 @@ YAML 1.1, so `yaml.safe_load(...)["on"]` raises `KeyError` — a false alarm whe
 validating a workflow locally. GitHub uses its own parser that handles `on` correctly.
 To validate, check `jobs`/step structure instead of `["on"]`, and never assign a second
 step the same `id` in a job (duplicate step ids are invalid).
+
+## 26. UF2 drag-and-drop requires 8.3 FAT16 compliant filename (verified 2026-08-29)
+
+The bootloader's tiny simulated FAT16 mass storage drive does not fully implement Long File Names (LFN). Copying a UF2 file with a long name (like eClock-v0.1.0.uf2) crashes the bootloader mid-transfer because Windows attempts to write VFAT LFN directory entries. This yields a 'device which does not exist' error.
+
+**Fix:** Rename the UF2 file to an 8.3-compliant name (e.g., ECLOCK.UF2) before copying, or use the GitHub Release workflow which now automatically produces an 8.3 compliant filename.
