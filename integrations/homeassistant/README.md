@@ -70,8 +70,10 @@ epaper_clock:
 
 `day` accepts a weekday name (`Sun`/`Mon`/`Tue`/`Wed`/`Thu`/`Fri`/`Sat`, or the full
 name) or a date in `day month` (annual) / `day month year` (one-off) form. It is
-case-insensitive. The older explicit keys (`month`, `day`, `year`, `weekday`) also
-still work.
+case-insensitive. Only `message` and `day` are supported keys. Any entry that is
+missing a `message`, has an unrecognised key, or whose `day` can't be parsed is
+**reported as an error in the Home Assistant log** (and skipped) — so a misconfigured
+line is never silently ignored.
 
 Behaviour:
 - The message is selected by **Home Assistant's local date** (so it follows HA's

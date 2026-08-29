@@ -4,20 +4,20 @@ This module has NO Home Assistant imports so it can be unit-tested in isolation
 (with pytest) without a running Home Assistant instance. It implements the
 documented, settled rules:
 
-  * A message is an entry that is EITHER date-based or weekday-based:
-      - Date-based: ``{message, month, day, year?}``.
-          * If ``year`` is present, it fires ONLY on that exact date.
-          * If ``year`` is absent, it fires every year on (month, day).
-      - Weekday-based: ``{message, weekday}`` where weekday is 0=Monday .. 6=Sunday
-        (matching ``datetime.weekday()``). Fires every week on that weekday.
-  * Selection precedence:
-      1. Date-based messages that match today win over weekday messages.
-      2. If none match by date, a weekday message matching today's weekday is used.
-      3. Within each group, the LAST matching entry in the list wins (so a specific
-         one-off can override an annual, and a later weekday entry overrides an
-         earlier one).
-      4. No match -> no message (caller writes an all-NUL payload to clear the line).
+  * A message is an entry ``{message}`` plus an optional natural ``day`` rule:
+      - Default: ``{message}`` only -> lowest-precedence fallback.
+      - Weekly:  ``{message, day: 'Fri'}`` / ``'Friday'`` -> every week.
+      - Annual:  ``{message, day: '25 Dec'}`` -> every year.
+      - One-off: ``{message, day: '14 Mar 2026'}`` -> only that date.
+      `day` is case-insensitive; weekday/month names are supported.
+  * Selection precedence (highest -> lowest):
+      1. One-off / annual date rules matching today; LAST in the list wins.
+      2. A weekday rule matching today's weekday; LAST in the list wins.
+      3. A default message (no rule).
+  * No match -> no message (caller writes an all-NUL payload to clear the line).
   * Overflow: the caller truncates to MAX_MESSAGE_CHARS before writing.
+  * Invalid / unparseable entries are reported (not silently dropped) so the HA
+    caller can log them.
 
 See docs/research/message-feature-design.md for the full design record.
 """
@@ -250,50 +250,57 @@ def encode_message(message: str, width: int = MAX_MESSAGE_CHARS) -> bytes:
     return data.ljust(width, b"\x00")
 
 
-def parse_messages(raw_entries) -> list[Message]:
-    """Parse a list of config dicts into :class:`Message` objects.
+def parse_messages(raw_entries) -> tuple[list[Message], list[str]]:
+    """Parse config dicts into (:class:`Message` objects, error messages).
 
-    Each entry has ``message`` plus a rule in one of these forms:
-      * Default:  ``message`` only (no day/weekday) — lowest-precedence fallback.
-      * Weekly:   ``day: Fri`` / ``day: Friday``  (or numeric ``weekday: 4``)
-      * Annual:   ``day: 23 Jun``  (or ``month: 6, day: 23``)
-      * One-off:  ``day: 23 Jun 2026``  (or ``month: 6, day: 23, year: 2026``)
-    ``year`` is OPTIONAL for date rules (absent = annual). Case-insensitive for the
-    weekday/month names. Invalid entries are skipped; the caller may log them.
+    Each entry has ``message`` plus an optional ``day`` rule in one of these forms
+    (case-insensitive):
+      * Default:  ``message`` only (no `day`) — lowest-precedence fallback.
+      * Weekly:   ``day: Fri`` / ``day: Friday``.
+      * Annual:   ``day: 25 Dec``.
+      * One-off:  ``day: 14 Mar 2026``.
+
+    Returns ``(messages, errors)``. ``errors`` is a list of human-readable strings
+    (one per invalid entry) so the Home Assistant layer can log them; invalid entries
+    are NOT silently converted into a default message.
     """
     messages: list[Message] = []
-    for entry in raw_entries or []:
+    errors: list[str] = []
+
+    for index, entry in enumerate(raw_entries or [], start=1):
+        if not isinstance(entry, dict):
+            errors.append(f"messages[{index}]: not a mapping: {entry!r}")
+            continue
+
         text = entry.get("message")
-        if not text:
+        if not isinstance(text, str) or not text.strip():
+            errors.append(f"messages[{index}]: missing or empty 'message'")
+            continue
+
+        # Anything other than the natural `day` rule is no longer supported.
+        unknown = set(entry.keys()) - {"message", "day"}
+        if unknown:
+            errors.append(
+                f"messages[{index}]: unsupported key(s) {sorted(unknown)} — "
+                f"use 'day' only (e.g. day: Fri, day: 25 Dec, day: 14 Mar 2026)"
+            )
             continue
 
         day_val = entry.get("day")
-        month_val = entry.get("month")
-        year_val = entry.get("year")
-        weekday_val = entry.get("weekday")
-
-        # Try the natural `day` string form first (covers weekly/annual/one-off).
         month, day, year, weekday = _parse_day(day_val)
 
-        # Fall back to the explicit integer keys (month/day/year or weekday).
-        if month is None and day is None and year is None and weekday is None:
-            if month_val is not None and day_val is not None and isinstance(day_val, int) and not isinstance(day_val, bool):
-                month, day = int(month_val), int(day_val)
-                year = int(year_val) if year_val is not None else None
-            else:
-                weekday = _parse_weekday(weekday_val) if weekday_val is not None else _parse_weekday(day_val)
+        if weekday is not None:
+            messages.append(Message(str(text).strip(), weekday=weekday))
+        elif month is not None and day is not None:
+            messages.append(Message(str(text).strip(), month=month, day=day, year=year))
+        elif day_val is None:
+            # No `day` at all -> default message.
+            messages.append(Message(str(text).strip(), default=True))
+        else:
+            # A `day` was given but couldn't be parsed -> invalid (config error).
+            errors.append(
+                f"messages[{index}]: could not parse day={day_val!r} "
+                f"(expected a weekday name, \"day month\", or \"day month year\")"
+            )
 
-        if month is not None and day is not None:
-            messages.append(Message(str(text), month=month, day=day, year=year))
-        elif weekday is not None:
-            messages.append(Message(str(text), weekday=weekday))
-        elif (
-            day_val is None
-            and month_val is None
-            and year_val is None
-            and weekday_val is None
-        ):
-            # No rule keys at all -> this is an explicit DEFAULT message.
-            messages.append(Message(str(text), default=True))
-        # else: a rule key was provided but it was invalid -> skip (config error).
-    return messages
+    return messages, errors

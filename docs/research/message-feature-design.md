@@ -19,8 +19,9 @@ Allow Home Assistant to push a small text message (e.g. "Merry Christmas",
   - **Annual:** `{ message, day: "25 Dec" }` — fires every year on that date.
   - **One-off:** `{ message, day: "14 Mar 2026" }` — fires only on that date (highest
     precedence among date rules).
-  - `day` is case-insensitive; the older explicit keys (`month`, `day`, `year`,
-    `weekday`) also still work.
+  - `day` is case-insensitive. Only `message` and `day` keys are supported. Invalid
+    entries (missing message, unrecognised key, unparseable `day`) are reported as
+    errors in the Home Assistant log and skipped — never silently ignored.
 - **Message length cap:** **30 characters.** (Fits the whitespace before AM/PM with
   a 2-char margin; see below.)
 - **Selection precedence** (highest → lowest):

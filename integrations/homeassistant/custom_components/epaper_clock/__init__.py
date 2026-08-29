@@ -49,9 +49,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     mac_addresses = [mac.upper() for mac in mac_addresses]
 
-    # Parse the bottom-message config: a list of {message, month, day, year?}.
-    # A message without 'year' fires every year; with 'year' fires on that date only.
-    messages = parse_messages(domain_config.get("messages", []))
+    # Parse the bottom-message config (natural `day` rules only), logging any
+    # invalid lines so the user sees exactly what to fix.
+    messages, message_errors = parse_messages(domain_config.get("messages", []))
+    for err in message_errors:
+        _LOGGER.error("epaper_clock: invalid message config: %s", err)
     if messages:
         _LOGGER.info("Configured %d message(s) for the ePaper Clock.", len(messages))
     else:
