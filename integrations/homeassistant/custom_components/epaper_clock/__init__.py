@@ -20,7 +20,19 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "epaper_clock"
 CURRENT_TIME_CHAR_UUID = "00002a2b-0000-1000-8000-00805f9b34fb"
+# Custom 128-bit UUID for the bottom-message characteristic (additive; never change
+# the time sync above). Chosen to avoid clashing with any Bluetooth SIG standard
+# assignment. Shared with the firmware (see docs/research/message-feature-design.md).
+MESSAGE_CHAR_UUID = "c0dec10c-2a2c-4a20-8c10-000000000000"
 DEVICE_NAME = "ePaper Clock"
+
+from .message_selection import (  # noqa: E402
+    MAX_MESSAGE_CHARS,
+    encode_message,
+    parse_messages,
+    select_message,
+    truncate_message,
+)
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the epaper_clock integration."""
@@ -36,6 +48,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         mac_addresses.extend(domain_config["mac_addresses"])
 
     mac_addresses = [mac.upper() for mac in mac_addresses]
+
+    # Parse the bottom-message config: a list of {message, month, day, year?}.
+    # A message without 'year' fires every year; with 'year' fires on that date only.
+    messages = parse_messages(domain_config.get("messages", []))
+    if messages:
+        _LOGGER.info("Configured %d message(s) for the ePaper Clock.", len(messages))
+    else:
+        _LOGGER.debug("No messages configured; the clock shows its normal clock face.")
 
     # Dictionary to keep track of cooldowns per MAC address
     last_sync_timestamps = {}
@@ -73,6 +93,36 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
                 await client.write_gatt_char(CURRENT_TIME_CHAR_UUID, payload, response=True)
                 _LOGGER.info("Time successfully synchronized with ePaper Clock %s!", address)
+
+                # --- Bottom message (additive, best-effort) ----------------------
+                # Compute today's message from HA's LOCAL date and write it to the
+                # dedicated characteristic. NEVER blocks the time sync: if the clock
+                # is older (no message characteristic, or a write fails), we log and
+                # continue — time is already synced. Always writes a fixed-width,
+                # NUL-padded payload so the firmware clears the line when none applies
+                # (an all-NUL payload).
+                try:
+                    message_text = select_message(
+                        messages,
+                        month=datetime.now().month,
+                        day=datetime.now().day,
+                        year=datetime.now().year,
+                    )
+                    message_text = truncate_message(message_text, MAX_MESSAGE_CHARS)
+                    payload_msg = encode_message(message_text, MAX_MESSAGE_CHARS)
+                    await client.write_gatt_char(MESSAGE_CHAR_UUID, payload_msg, response=True)
+                    _LOGGER.info(
+                        "Message sent to ePaper Clock %s (%d bytes): %r",
+                        address,
+                        len(payload_msg),
+                        message_text or "(none)",
+                    )
+                except Exception as msg_err:
+                    _LOGGER.warning(
+                        "Could not send message to %s (older clock or write failed): %s",
+                        address,
+                        msg_err,
+                    )
 
         except Exception as err:
             # If we match blindly by UUID, we might connect to another device (e.g. smartwatch).

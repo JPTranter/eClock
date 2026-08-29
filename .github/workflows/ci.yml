@@ -65,3 +65,19 @@ jobs:
           name: main-cpp-coverage
           path: firmware/test/build/output/coverage/
           retention-days: 14
+
+  # Run the Home Assistant integration's PURE logic unit tests. These are collected
+  # from integrations/homeassistant/tests (outside the component package, so bleak
+  # and a full HA install aren't needed). pytest.ini scopes testpaths there.
+  ha-integration:
+    name: HA integration unit tests (message selection)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Run message-selection unit tests
+        run: pytest -c pytest.ini -v

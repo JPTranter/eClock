@@ -44,6 +44,45 @@ epaper_clock:
 Restart Home Assistant. You will need the Bluetooth integration set up and a working
 adapter or ESPHome Bluetooth proxy within range of the clock.
 
+## Bottom messages (optional)
+
+Since HA v0.2.0, the component can push a short text message that the clock displays
+on the bottom row (e.g. holiday greetings, a birthday). Configure a `messages:` list;
+each entry is `{message, month, day, year?}`:
+
+```yaml
+epaper_clock:
+  mac_addresses:
+    - "AA:BB:CC:DD:EE:FF"
+  messages:
+    # Annual events: NO year -> fires every year on (month, day).
+    - message: "Merry Christmas"
+      month: 12
+      day: 25
+    - message: "Happy New Year"
+      month: 1
+      day: 1
+    # One-off: include a year -> fires only on that exact date.
+    - message: "Happy Birthday Sam"
+      month: 3
+      day: 14
+      year: 2026
+```
+
+Behaviour:
+- The message is selected by **Home Assistant's local date** (so it follows HA's
+  timezone, matching the date the clock shows).
+- If **two** entries match the same day, the **last one in the list** wins — so a
+  specific `year`-scoped entry listed after an annual one overrides it that year.
+- If **no** entry matches today, an all-NUL payload is written so the clock clears
+  the line (shows its normal clock face).
+- Messages are **truncated to 30 characters** on the HA side before sending (the
+  clock also clamps defensively), so the text never collides with the AM/PM display.
+- The message is sent on a **separate** characteristic (`c0dec10c-2a2c-4a20-8c10-000000000000`),
+  written **best-effort after** the time sync. Older clocks without that
+  characteristic are unaffected — the write simply fails and is logged, and the
+  time sync still succeeds.
+
 ## Manual sync
 
 The component registers a service that bypasses the cooldown:
