@@ -490,9 +490,18 @@ void loop() {
                     g_state = STATE_NO_TIME;
                     g_needs_display_update = true;
                 } else {
-                    // Re-sync failed — carry on with the drifting clock
+                    // Re-sync failed — carry on with the drifting clock.
+                    // Push g_last_sync_millis forward to now so the hourly gate
+                    // (now - g_last_sync_millis >= SYNC_INTERVAL) is not still
+                    // satisfied, and the clock backs off a FULL hour before
+                    // trying again. Without this, a failed attempt leaves the
+                    // gate true and the clock immediately re-enters RESYNCING
+                    // on the next loop() iteration — a tight retry loop that
+                    // keeps the radio advertising and drains the battery.
+                    // A button press still forces a manual re-sync (see §2).
                     g_state = STATE_RUNNING;
                     g_last_sync_failed = true;
+                    g_last_sync_millis = millis();
                     g_needs_display_update = true;
                 }
             }

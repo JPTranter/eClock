@@ -59,7 +59,7 @@ taken on that transition.
 | `RUNNING` | `SLEEPING` | Nighttime (`isNighttime(local_sec)`, 23:00–05:00) **and** not being held awake (`(int32_t)(now - g_awake_until) >= 0`). `loop()` §3. | `enterSleepMode()`: draws Zzz + "Sleeping", stops radio, cuts panel rail (D6 LOW), blocks in WFE for 6 h. |
 | `RUNNING` | `LOW BATTERY LOCK` | Critical battery (`isCriticalBattery(pct)`, ≤5%) and not already locked, and not on USB (`pct >= 0`). `loop()` §3. | `g_low_battery_lock = true`; `BLE.stopAdvertise()`; draws the final "LOW BATTERY" screen; **no further redraws ever** (the lock blocks §5). |
 | `RESYNCING` | `RUNNING` | BLE time write received (same as SYNCING→RUNNING). | Time updated; radio stopped; back to running. |
-| `RESYNCING` | `RUNNING` | Sync timeout **and** `g_epoch != 0` (had a time already). `loop()` §3. | `g_last_sync_failed = true`; carries on with the drifting clock (does **not** show the error screen). |
+| `RESYNCING` | `RUNNING` | Sync timeout **and** `g_epoch != 0` (had a time already). `loop()` §3. | `g_last_sync_failed = true`; **`g_last_sync_millis` is pushed to now** so the clock backs off a full hour before retrying (no tight retry loop that would drain the battery). Carries on with the drifting clock (does **not** show the error screen). |
 | `NO_TIME` | `RESYNCING` | Button press. `loop()` §2. | `startSyncAttempt()` — tries again. |
 | `SLEEPING` | `RESYNCING` | 5am wake (fixed 6 h sleep elapses, no button). `enterSleepMode()`. | Panel repowered (D6 HIGH), display re-inited, `startSyncAttempt()`. |
 | `SLEEPING` | `RESYNCING` | Button wakes the clock early. `enterSleepMode()`. | Same as above, **plus** `g_awake_until = millis() + sec_to_shutdown` so the clock stays awake until the next 11pm. |

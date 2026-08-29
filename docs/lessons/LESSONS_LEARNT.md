@@ -1391,3 +1391,50 @@ the doc embeds.
 **Git:** node_modules and the puppeteer cache are ignored in `.gitignore`
 (`node_modules/`, `.cache/puppeteer/`), so installing the tool locally never dirties the
 repo. `docs/design/package*.json` is ignored too.
+
+---
+
+## 30. A failed re-sync must back off a full hour — and how TDD caught it (verified 2026-08-29)
+
+**Symptom (observed on hardware, bedside clock):** the sync icon kept re-appearing
+every minute. The state machine was re-entering `RESYNCING` far more often than the
+intended once/hour.
+
+**Root cause:** `g_last_sync_millis` (the timestamp the hourly re-sync gate compares
+against) was updated **only on a successful BLE time write**. On a **failed** re-sync
+the code went back to `RUNNING` and set `g_last_sync_failed = true`, but never advanced
+that timestamp. So the gate `if (now - g_last_sync_millis >= SYNC_INTERVAL)` stayed
+true, and the clock re-entered `RESYNCING` on the *next* `loop()` iteration — a tight
+retry loop that kept the radio advertising and drained the battery.
+
+**Why the tests didn't catch it:** the existing `RunningResyncIntervalTriggersResync`
+test only asserted that the clock *enters* RESYNCING after a full interval. The
+`ResyncingTimeoutWithEpochGoesRunningFailed` test asserted the timeout returns to
+RUNNING. **No test covered the very next `loop()` iteration after a failed attempt** —
+the exact place the loop happened. (A great example of a coverage *gap*, not a code
+*defect*, letting a real bug through.)
+
+**The fix (TDD):** write the regression test first (`FailedResyncBacksOffFullHour...`),
+watch it fail, then add one line in the failed-resync path:
+
+```cpp
+g_state = STATE_RUNNING;
+g_last_sync_failed = true;
+g_last_sync_millis = millis();   // <-- push the gate forward: back off a full hour
+g_needs_display_update = true;
+```
+
+The clock now backs off a full `SYNC_INTERVAL` (1 h) after a failure. A button press
+still forces an immediate manual re-sync (separate path, unchanged). The battery is
+protected — no more radio hammering.
+
+**Design principle worth naming:** "don't hammer a resource that just failed." When a
+time-based retry depends on a *last-success* timestamp, make sure a *failure* also
+moves that timestamp forward (or has its own backoff), otherwise the "it's been long
+enough" condition remains satisfied and you get a hot loop. A dedicated regression
+test for the "the tick *after* the failure" is what closes the gap.
+
+**TDD pattern here:** for a bug that only manifests a *full cycle after* a state change,
+write the test to run the full scenario (sync → interval → resync → timeout → *one more
+loop*) rather than asserting a single transition. That's what made the failure
+reproducible and the fix verifiable.

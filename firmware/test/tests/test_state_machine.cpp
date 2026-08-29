@@ -133,3 +133,81 @@ TEST(State, NoTimeStateInLoopIsStable) {
     ClockFixture::runLoop();
     EXPECT_EQ(ClockFixture::state(), STATE_NO_TIME);
 }
+
+// BUG REGRESSION TEST: a failed re-sync must NOT immediately re-enter RESYNCING.
+//
+// Scenario: the clock had a valid time (g_epoch != 0) and last synced at T.
+// One hour later it enters RESYNCING, but Home Assistant does not respond, so
+// the attempt times out after SYNC_TIMEOUT and returns to RUNNING with
+// g_last_sync_failed = true. It must then back off a FULL hour before trying
+// again — NOT immediately re-enter RESYNCING.
+//
+// Before the fix, g_last_sync_millis was only updated on a *successful* sync,
+// so after a failure `now - g_last_sync_millis >= SYNC_INTERVAL` stayed true and
+// the clock re-entered RESYNCING on the very next loop() iteration — a tight
+// retry loop that kept the radio on and drained the battery (observed on hardware
+// as the sync icon re-appearing every ~minute). See LESSONS_LEARNT.md §30.
+TEST(State, FailedResyncBacksOffFullHourInsteadOfImmediateRetry) {
+    ClockFixture::reset();
+
+    // 1. Give the clock a valid time at time T (local 10:00, not bedtime).
+    int32_t epoch = 1000 * 3600;         // 10:00 local
+    ClockFixture::setEpoch(epoch, 0);
+    g_state = STATE_RUNNING;
+    // Simulate that a sync succeeded at the current millis (so the hourly gate
+    // is exactly one SYNC_INTERVAL away).
+    ClockFixture::simulateBleTimeWrite(epoch, 0);
+    ClockFixture::runLoop();             // processes the write -> RUNNING
+    EXPECT_EQ(ClockFixture::state(), STATE_RUNNING);
+
+    // 2. Advance past the hourly interval -> the clock starts a re-sync.
+    ClockFixture::advanceMillis(SYNC_INTERVAL);
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_RESYNCING);
+
+    // 3. Home Assistant is silent: let the attempt time out.
+    ClockFixture::advanceMillis(SYNC_TIMEOUT);
+    ClockFixture::runLoop();
+    // It must go back to RUNNING (it has a time) and flag the failure.
+    EXPECT_EQ(ClockFixture::state(), STATE_RUNNING);
+    EXPECT_TRUE(ClockFixture::lastSyncFailed());
+
+    // 4. THE BUG: immediately after the failed attempt, the clock must NOT
+    //    re-enter RESYNCING. It should back off a full hour.
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_RUNNING)
+        << "A failed re-sync must back off a full hour, not immediately retry "
+           "(which keeps the radio on and drains the battery).";
+
+    // 5. It must still be RUNNING (not re-syncing) even a little later, until a
+    //    full SYNC_INTERVAL has elapsed since the *failed* attempt.
+    ClockFixture::advanceMillis(SYNC_INTERVAL / 2);
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_RUNNING);
+
+    // 6. Only after a full hour of backoff should it try again.
+    ClockFixture::advanceMillis(SYNC_INTERVAL / 2);
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_RESYNCING);
+
+    // 7. A button press during the backoff must still force a manual re-sync.
+    ClockFixture::reset();
+    g_state = STATE_RUNNING;
+    g_last_sync_failed = true;           // in the backoff window
+    // No need for a full hour: a press should override the backoff.
+    debouncedButtonPress();
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_RESYNCING);
+}
+
+// A failed boot sync (no time ever) still goes to the error screen. That path
+// is separate from the re-sync backoff and must be unaffected.
+TEST(State, FailedReorderBootSyncStillGoesNoTime) {
+    ClockFixture::reset();
+    ClockFixture::runSetup();            // SYNCING, no time yet
+    EXPECT_EQ(ClockFixture::state(), STATE_SYNCING);
+
+    ClockFixture::advanceMillis(SYNC_TIMEOUT);
+    ClockFixture::runLoop();
+    EXPECT_EQ(ClockFixture::state(), STATE_NO_TIME);
+}
