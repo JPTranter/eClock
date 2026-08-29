@@ -29,7 +29,7 @@ cd firmware
 pio run -e mbed
 ```
 
-Flash/RAM usage is printed on a successful build (≈353 KB / 44.6% flash, ≈73 KB /
+Flash/RAM usage is printed on a successful build (≈360 KB / 45.4% flash, ≈73 KB /
 31.5% RAM).
 
 ## Flash (serial DFU is the reliable path on this machine)

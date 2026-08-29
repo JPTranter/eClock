@@ -165,8 +165,8 @@ pio run -e mbed
 ```
 
 The first build downloads the platform and toolchain (a few hundred MB) and takes a few
-minutes; later builds are seconds. Flash/RAM usage is printed at the end (≈353 KB /
-44.6% flash, ≈73 KB / 31.5% RAM).
+minutes; later builds are seconds. Flash/RAM usage is printed at the end (≈360 KB /
+45.4% flash, ≈73 KB / 31.5% RAM).
 
 ### Run the host unit tests (no hardware needed)
 

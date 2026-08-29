@@ -28,7 +28,7 @@ The platform is pinned to `https://github.com/maxgerhardt/platform-nordicnrf52.g
 because the `xiaoble_adafruit` / `xiaoblesense_adafruit` board definitions live in that
 fork, not in the official PlatformIO `nordicnrf52` platform.
 
-Current expected footprint (mbed core): RAM 31.5% (74,768 B), Flash 44.6% (361,316 B).
+Current expected footprint (mbed core): RAM 31.5% (74,800 B), Flash 45.4% (368,220 B).
 
 ## 3. Identify the two USB identities
 
