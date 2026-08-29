@@ -1,8 +1,7 @@
 # Bottom-Message Feature — Design Record & Implementation Reference
 
-> Status: **design settled (2026-08-29), implementation pending.** This is the
-> reference for building the feature. The reference screenshot is
-> `docs/screenshots/target_design_message_layout.png`.
+> Status: **implemented (2026-08-29).** This records the design and the settled
+> wire contract. The final approved layouts are listed under "Reference screenshots".
 
 ## Goal
 Allow Home Assistant to push a small text message (e.g. "Merry Christmas",
@@ -81,10 +80,13 @@ The message must **never collide with AM/PM**. From measurement:
   clock never receives an over-long message; the firmware also clamps defensively).
 - Practical safe cap: **30 characters** (leaves ~2 char / ~15px margin to AM/PM).
 
-## Reference screenshot
-`docs/screenshots/target_design_message_layout.png` shows the three target states
-(no message, 31-char which reveals the overflow risk, sync-failed + message).
-Keep it until implementation is complete, as the design history.
+## Reference screenshots
+Implementation is complete. The final approved layouts are:
+- `docs/screenshots/running.png` — normal clock face (no message).
+- `docs/screenshots/message.png` — clock face with a bottom message.
+- `docs/screenshots/running_usb.png` — USB/charging (bolt icon, no %).
+- `docs/screenshots/running_low_battery.png` — low battery (empty icon).
+- `docs/screenshots/state_matrix_approval.png` — every sync × power top-right combo.
 
 ## Backend / protocol (for implementation)
 - New writable BLE characteristic for the message (separate UUID), on top of the

@@ -24,6 +24,9 @@ Assistant time sync, and the running clock face once it has time.
 | --- | --- | --- |
 | <img src="docs/screenshots/syncing.png" alt="Syncing page" width="296"> | <img src="docs/screenshots/running.png" alt="Clock face" width="296"> | <img src="docs/screenshots/message.png" alt="Clock face with a message" width="296"> |
 
+Every sync/power icon combination is shown in
+[`docs/screenshots/state_matrix_approval.png`](docs/screenshots/state_matrix_approval.png).
+
 ## Design goals
 
 - Readable at a glance from across a room.

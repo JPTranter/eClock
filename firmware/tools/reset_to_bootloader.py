@@ -6,7 +6,7 @@ board -- the UF2 mass-storage drive does not remount dependably after the first
 entry, so drag-and-drop flashing is not repeatable.
 
 Usage: python tools/reset_to_bootloader.py
-Then:  pio run -e adafruit -t upload --upload-port <bootloader port>
+Then:  pio run -e mbed -t upload --upload-port <bootloader port>
 """
 import sys
 import time
@@ -32,7 +32,7 @@ def main():
     boot = find_port(BOOT_PID)
     if boot:
         print(f"[host] already in bootloader on {boot} - nothing to do")
-        print(f"[host] upload with: pio run -e adafruit -t upload --upload-port {boot}")
+        print(f"[host] upload with: pio run -e mbed -t upload --upload-port {boot}")
         return 0
 
     app = find_port(APP_PIDS)
@@ -59,7 +59,7 @@ def main():
         boot = find_port(BOOT_PID)
         if boot:
             print(f"[host] bootloader up on {boot}")
-            print(f"[host] upload with: pio run -e adafruit -t upload --upload-port {boot}")
+            print(f"[host] upload with: pio run -e mbed -t upload --upload-port {boot}")
             return 0
         time.sleep(0.1)
 

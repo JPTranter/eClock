@@ -71,7 +71,7 @@ described as you actually see them on the panel.
 | **A lightning-bolt icon** | Plugged into USB / charger. It's charging — no percentage shown because it's running off the wire, not the cell. |
 | **An *empty* battery icon (no fill) with a low number** | Battery running low — **charge it soon** (see "Charging" below). |
 
-![Running on a low battery](screenshots/running_low_battery.png)
+![Charging over USB](screenshots/running_usb.png)   ![Running on a low battery](screenshots/running_low_battery.png)
 
 Because the panel barely uses power, a full charge lasts months — you'll rarely think
 about the battery. But the clock gives you two clear heads-ups before it runs out
@@ -99,6 +99,14 @@ which wins over a default message. When nothing applies, the bottom row is blank
 AM/PM display.
 
 ![A message on the clock face](screenshots/message.png)
+
+### Every top-right combination
+
+The top-right group shows the sync status together with the power state. Here's every
+combination at a glance (the sync icon is always flush at the top, and the battery /
+bolt icon aligns with it):
+
+![All sync and power state combinations](screenshots/state_matrix_approval.png)
 
 ---
 

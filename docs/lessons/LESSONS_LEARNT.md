@@ -1094,8 +1094,10 @@ pio run -e mbed
 pio run -e mbed -t upload --upload-port <bootloader port>
 ```
 
-This is worth pinning: `docs/SETUP.md` still leads with `-e adafruit`, and the host
-test harness sets `ECLOCK_CORE_MBED` for the same reason (see §22).
+This is worth pinning. `docs/SETUP.md` and the README now correctly lead with
+`-e mbed`, and `firmware/tools/reset_to_bootloader.py` prints the `-e mbed` upload
+hint (it previously said `-e adafruit`, which is wrong for the current firmware). The
+host test harness sets `ECLOCK_CORE_MBED` for the same reason (see §22).
 
 ### PlatformIO's `platforms.lock` is outside the workspace — a file-sandbox gotcha
 
@@ -1502,6 +1504,41 @@ epaper_clock:
 first (UUID, value format, NUL-padding, truncation) and keep it **additive** so older
 devices are unaffected. Render-side, measure by *ink* not by *box* when placing text
 next to icons.
+
+### Hard-won rendering lessons from the review cycle
+These were found by rendering and pixel-measuring the top-right group, then iterating
+until it looked right. Each was a real bug, not a style preference.
+
+- **A sync glyph's height varies, so DON'T derive the group's centre line from it.**
+  `icon_synced`/`icon_failed` are 17px tall (visible centre 8.0 when flush), but
+  `icon_syncing` is only 13px tall (centre 6.0). Computing the shared centre line from
+  the *active* sync icon made the whole group jump up ~2px whenever the clock was
+  syncing. Fix: use a **fixed** centre line (8.0) for every state, and draw the sync
+  icon top-edge flush; its shorter height then just means it doesn't reach as far down,
+  without moving the group.
+
+- **Icons with blank padding rows break bounding-box alignment.** The battery bitmap is
+  15px tall but its ink only occupies rows 0–9 (5 blank rows at the bottom), so its
+  bounding-box centre (7.5) ≠ its visible-ink centre (4.5). Aligning by box put the
+  battery ~2.5px too high. Fix: a `visibleBitmapCentreY()` helper that scans for rows
+  with ink and centres on those. Same idea for horizontal: `visibleBitmapInkLeft()` to
+  seat neighbours against an icon's actual ink left edge (the % and bolt glyphs have
+  left sidebearing / blank padding).
+
+- **Seat text by its INK, not its bounding box.** `getTextBounds` returns the box plus an
+  ink offset (`bx`); the ink spans `[box_x+bx, box_x+bx+bw]`. Seating a neighbour
+  against the *box* produced a visible gap (the % glyph has ~5px sidebearing → a 7px
+  loose gap instead of the intended ~2px). Seat against `box_x + bx`.
+
+- **The USB/no-% case must seat against its own icon, not a text position.** When there
+  is no `%` (USB/bolt), the group is `[sync icon][bolt]`. Seating the sync icon against
+  a stale "text ink left" position left a huge whitespace. Fix: branch so each power
+  case (battery+%, bolt) sets the sync icon's anchor to that case's own ink left edge.
+
+- **Empty = all-NUL payload, and it's the "no message" signal.** The firmware treats the
+  first NUL as end-of-string; HA writes an all-NUL 30-byte payload when no message
+  applies so the clock clears the line. A plain empty/blank string must not be sent as a
+  zero-length write — always the fixed-width NUL-padded frame.
 
 > **Note on earlier layout lessons:** §17/§18 (the old "status line at the bottom
 > left / icons at the bottom left" descriptions, verified 2026-08-23/24) describe the
