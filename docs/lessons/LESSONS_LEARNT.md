@@ -1630,3 +1630,53 @@ keeping ink black (0). Now `docs/screenshots/*.png` look like the actual panel. 
 **Lesson:** regenerate ALL docs screenshots from the (rebuilt) harness after any render
 change — the `regenerate_docs_screenshots.py` script does this in one shot and now
 produces the gray-background, stretched-font set.
+
+---
+
+## 34. Choosing a time font + the colon-baseline generator bug (verified 2026-08-29)
+
+### v0.3.0: the big-time font is now Titan One 104pt (no squish, no stretch)
+
+A 16-font comparison was measured against the real 296×128 geometry
+(`docs/reference/candidate_fonts_comparison.png`). Results:
+- **Titan One 104pt** — chosen. Width-constrained (like Chango), fits `10:44` at 283px
+  (L5/R8 margin), ink ~82px fills the vertical band, no squish or vertical stretch
+  needed. Reads clean and bold.
+- **Chewy** — rejected. Its natural advance = glyph width (no built-in tracking), so the
+  Chango `-8px squish` causes glyph overlap AND the colon (a 19px-wide glyph) collapses
+  to ~11px advance and visually vanishes. With NO squish it works but its wide "4"s and
+  playful style made it a weaker fit than Titan One.
+- **Chango 88pt (squished + 1.1× stretch)** — superseded (was v0.2.0's font).
+
+### The colon-baseline generator bug (this drove a real fix)
+
+`gfxfont_gen.py` set every glyph's `yOffset = -bbox[3]`. That only bottom-aligns glyphs
+that share the same `bbox[1]` (ink TOP). The colon's `bbox[1]` differs from the digits',
+so a naive generator **top-aligns** the colon and it FLOATS above the baseline. In the
+renders the colon sat ~19px high. Shipped Chango avoided this only because a prior manual
+`font_tool fix` happened to bottom-align it within 5px.
+
+**The fix (now in the generator):** bottom-align every glyph to the digits' baseline:
+`baseline_bottom = mode_digit_yOffset + avg_digit_height`, then
+`glyph.yOffset = baseline_bottom - glyph.height`. This makes the colon's ink bottom share
+the digits' baseline (bottom delta → 0px). Confirmed against a PIL ground-truth render.
+`--center-colon` remains as an opt-in for fonts that genuinely need a centred colon.
+
+### Self-describing font headers
+The generated header now carries its own metrics so callers don't hardcode them:
+- `// Recipe: pt=… stretch=… squish=… yAdvance=…`
+- `// Colon: NATIVE (honours typeface) yOffset=… h=…`
+- `#define FONT_BASELINE <y>` — the setCursor baseline that vertically centres the digits.
+
+`drawClockFace` reads `FONT_BASELINE` instead of a hardcoded 123/130. New options:
+`--squish <px>` (default 0), `--center-colon`.
+
+**Lessons:**
+- The GFX glyph `yOffset` convention (glyph top = baseline + yOffset; bottom = top+height)
+  means a shared yOffset does NOT bottom-align different-height glyphs. Bottom-align
+  requires `yOffset = shared_baseline_bottom - glyph_height`.
+- Measure colon alignment against a PIL ground-truth render (native TTF), not metric
+  arithmetic — the sign/offset conventions are easy to misapply.
+- Keep per-font "squish/stretch/colon" decisions in the generator options + header, never
+  hand-edit per font. The visual-fit numbers (fill %, margins) in the docs are per-font;
+  don't assume a squish recipe generalises (Chango needed -8px; Chewy needs 0).

@@ -10,6 +10,21 @@ The all-in-one tool at `firmware/tools/font_tool.py` wraps the entire
 workflow — sizing scan → generation → fix → centering math — in a
 single command. It depends on Pillow (`pip install Pillow`).
 
+To compare candidate display fonts (e.g. picking the time font) against the actual
+296×128 geometry — fitted sizes, squished width, vertical fill %, and a rendered
+comparison sheet — use:
+
+```bash
+python firmware/tools/font_compare.py "C:/path/to/fonts_dir" \
+    --output docs/reference/candidate_fonts_comparison.png
+```
+
+It fits each font's worst-case string within the panel width (applying the shipped
+`xAdvance = glyph_width - 8` squish) and reports fill % + margin. The current
+comparison sheet (16 candidates, incl. Passion One / Chewy / Luckiest Guy / Lilita One
+as the top fillers) is `docs/reference/candidate_fonts_comparison.png`. Candidate
+fonts are downloaded to `$TEMP/fontcmp` (see `font_compare.py` CANDIDATES).
+
 ```bash
 # Step 1: Scan sizes
 python firmware/tools/font_tool.py scan "C:/path/to/font.ttf"
@@ -125,7 +140,17 @@ default), and the 88pt font uses the same recipe. The table below shows the
 | 86pt | 65px | 66% | 288px | 8px | Marginal |
 | **88pt** | **67px** | **68%** | **290px** | **6px** | **Practical ceiling** — every 12h string fits |
 | 90pt | 68px | 69% | 302px | −6px | Overflows even on `10:44` |
-| **88pt + 1.1× v-stretch** | **73px** | **76%** | **282px** | **14px** | **Shipped** — same width, taller digits |
+| **88pt + 1.1× v-stretch** | **73px** | **76%** | **282px** | **14px** | Prior shipped font — same width, taller digits (superseded, see below) |
+
+**Current shipped font: Titan One 104pt (no squish, no stretch).** Titan One is a
+width-constrained display face (like Chango) but reads cleaner and needs no squish or
+vertical stretch to fill the panel — it fits `10:44` at 283px (L5/R8 margin) with the
+digits occupying the vertical band (ink ~82px). It was chosen after a 16-font comparison
+(`docs/reference/candidate_fonts_comparison.png`); Chewy was rejected (needs no squish
+or its wide glyphs overlap + the colon vanishes) and Chango was superseded. The colon is
+**bottom-aligned** to the digits' baseline, and the font header carries its own metrics:
+`// Recipe: ...`, `// Colon: ...`, and `#define FONT_BASELINE 129` so the renderer reads
+the baseline from the font instead of hardcoding it.
 
 The widest 12-hour string is `10:44` (the digit '1' is narrow but '0' plus
 '4's width in the minute position maximises the string). `10:00` is typically
@@ -133,6 +158,10 @@ a few pixels narrower at the squished xAdvance because the zeros are narrower
 than `4`.
 
 ### Filling vertical space without overflowing width
+
+> This technique was used for the prior Chango font (v0.2.0). The current shipped font,
+> Titan One 104pt, needs **no** squish or vertical stretch — it fills the panel at its
+> natural proportions. This recipe remains useful if you swap to another wide font.
 
 Because Chango is wide, going to a bigger point size to fill vertical space also
 widens the glyphs and overflows the panel (90pt overflows even on `10:44`). To fill

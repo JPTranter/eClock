@@ -2,17 +2,32 @@
 Generate an Adafruit GFX-style 1-bit font header from a TrueType font.
 Output: C header containing GFXfont struct and bitmap data.
 
-Usage: python gfxfont_gen.py <ttf_path> <point_size> <first_char> <last_char> <output.h> [--stretch-height scale]
+Usage: python gfxfont_gen.py <ttf_path> <point_size> <first_char> <last_char> <output.h> [--stretch-height scale] [--squish px] [--center-colon]
 
 The output format matches what fontconvert produces for the Adafruit GFX library.
 
-`--stretch-height` scales each glyph's rendered bitmap VERTICALLY by the given factor
-(e.g. 1.1) while keeping the glyph width and xAdvance unchanged. Combined with the
-xAdvance "squish" (see LESSONS #20 and FONT_GENERATION.md), this lets the time digits
-fill more vertical space on the 296x128 panel without overflowing its width.
+Options:
+- `--stretch-height scale` scales each glyph's bitmap VERTICALLY (width/advance kept).
+- `--squish px` reduces xAdvance by px (xAdvance = glyph_width - squish). Default 0
+  (advance = glyph width; needed for fonts with no built-in tracking like Chewy).
+- `--center-colon` centres the colon on the digit midpoint instead of the default
+  bottom-alignment.
+
+The header is self-describing and self-correcting:
+- Digit yOffsets are normalised to their mode only if there is real baseline variance.
+- The colon is BOTTOM-ALIGNED to the digits' baseline (all glyph ink bottoms share the
+  baseline; a naive `yOffset = -bbox[3]` would float the colon because the colon's
+  bbox[1] differs from the digits').
+- The header emits `#define FONT_BASELINE <y>` (the setCursor baseline that vertically
+  centres the digits) and a `// Recipe: ...` comment, so callers read metrics from the
+  font rather than hardcoding them.
 """
 import sys
 from PIL import Image, ImageDraw, ImageFont
+
+# The ePaper display's native resolution (296 x 128); used to compute the draw baseline.
+PANEL_WIDTH = 296
+PANEL_HEIGHT = 128
 
 
 def render_glyph(font, char, size, stretch=1.0):
@@ -115,6 +130,21 @@ def main():
             print("ERROR: --stretch-height must be > 0")
             sys.exit(1)
 
+    # Optional: --squish <px> reduces xAdvance by that many px (xAdvance = width - squish).
+    # Default 0 = advance == glyph width. Chango uses 8 (see LESSONS #20).
+    squish = 0
+    if "--squish" in sys.argv:
+        idx = sys.argv.index("--squish")
+        squish = int(sys.argv[idx + 1])
+        if squish < 0:
+            print("ERROR: --squish must be >= 0")
+            sys.exit(1)
+
+    # Optional: --center-colon forces the colon's centre onto the digit midpoint.
+    # Default is to honour the font's NATIVE colon yOffset (a typeface may deliberately
+    # sit the colon low, e.g. Chewy ~19px below centre; see LESSONS #33).
+    center_colon = "--center-colon" in sys.argv
+
     print(f"Loading font: {ttf_path}")
     font = ImageFont.truetype(ttf_path, pt_size)
     if stretch != 1.0:
@@ -161,6 +191,41 @@ def main():
         bitmaps.append(packed)
         bitmap_offset += len(packed)
 
+    # Honour each font's NATIVE metrics by default. CRITICAL: all glyphs must share one
+    # baseline. gfxfont_gen's naive yOffset = -bbox[3] only bottom-aligns glyphs with the
+    # SAME bbox[1] — the colon's bbox[1] differs from the digits', so it would float.
+    # Correct fix: set every glyph's ink BOTTOM to the digits' baseline (the digits' ink
+    # bottom). Pass --center-colon to centre the colon instead (opt-in; for fonts that
+    # need it). Normalise digit yOffsets only if there is real baseline variance.
+    digits = glyphs[:10]
+    colon = glyphs[10] if len(glyphs) >= 11 else None
+    if digits:
+        from collections import Counter
+        yo_counts = Counter(g['yOffset'] for g in digits)
+        mode_yo = yo_counts.most_common(1)[0][0]
+        if len(yo_counts) > 1:
+            for g in digits:
+                g['yOffset'] = mode_yo
+        # Shared baseline = the digits' ink bottom (rel baseline): mode_yo + digit_height.
+        # For each glyph, bottom-align: yOffset = baseline_bottom - glyph_height.
+        avg_digit_h = sum(g['height'] for g in digits) // len(digits)
+        baseline_bottom = mode_yo + avg_digit_h
+        for g in glyphs:
+            g['yOffset'] = baseline_bottom - g['height']
+        if colon is not None and center_colon:
+            digit_mid = mode_yo + avg_digit_h / 2.0
+            colon['yOffset'] = int(round(digit_mid - colon['height'] / 2.0))
+
+    # Apply the advance squish (xAdvance = width - squish). Default 0 = advance equals
+    # glyph width (minimum spacing, works for fonts with no built-in tracking like
+    # Chewy). Chango uses --squish 8 (see LESSONS #20).
+    for g in glyphs:
+        if squish:
+            g['xAdvance'] = max(0, g['width'] - squish)
+
+    # Re-emit the glyph table after the above corrections.
+    # (The glyphs list is rebuilt into the header below.)
+
     print(f"  Total bitmap size: {bitmap_offset} bytes for {len(glyphs)} glyphs")
 
     # Calculate yAdvance
@@ -170,10 +235,23 @@ def main():
     lines = []
     lines.append("// Generated by gfxfont_gen.py from " + ttf_path.split('/')[-1] + f" at {pt_size}pt")
     lines.append(f"// Range: {chr(first)} (0x{first:02X}) to {chr(last)} (0x{last:02X})")
+    lines.append(f"// Recipe: pt={pt_size} stretch={stretch} squish={squish} yAdvance={y_advance}")
+    lines.append(f"// Colon: {'centre-aligned to digits' if center_colon else 'NATIVE (honours typeface)'}"
+                 f" yOffset={colon['yOffset']} h={colon['height']}" if colon is not None
+                 else "// Colon: n/a")
+    lines.append("// Loads in flash via PROGMEM; drawn with GFX setFont(&font).")
     lines.append("#ifndef _INC_GFX_FONT_H_")
     lines.append("#define _INC_GFX_FONT_H_")
     lines.append("#include <gfxfont.h>")
     lines.append("")
+    # The draw baseline: the cursor Y at which to call setCursor so the digits' ink is
+    # vertically centred on the display. Derived from the digits' ink midpoint and the
+    # panel height. Callers use this instead of hardcoding the baseline.
+    if digits:
+        digit_mid = sum(g['yOffset'] for g in digits) / len(digits) + avg_digit_h / 2.0
+        baseline = round(PANEL_HEIGHT / 2.0 - digit_mid)
+        lines.append(f"// Baseline: setCursor(x, {baseline}) centres the digits vertically.")
+        lines.append(f"#define FONT_BASELINE {baseline}")
 
     # Bitmap array
     all_bytes = []

@@ -11,5 +11,5 @@
 #pragma once
 
 #ifndef ECLOCK_VERSION
-#define ECLOCK_VERSION "0.2.0"
+#define ECLOCK_VERSION "0.3.0"
 #endif

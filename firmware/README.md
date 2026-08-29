@@ -13,7 +13,7 @@ firmware/
                             ePaper rendering, power management, bottom message
   src/clock_logic.{h,cpp}   Pure, hardware-free time/sleep/battery logic
   src/clock_display.h       Templated ePaper screen renderers (header-only)
-  src/FontChango88.h        Custom 88pt Chango font for the time digits
+  src/FontTitanOne.h        Custom 104pt Titan One font for the time digits
   include/board_pins.h      EN05 pin map (per-core: mbed vs Adafruit)
   include/material_icons.h  Battery / bolt / sync-status icon bitmaps
   include/clock_version.h   Firmware version string (ECLOCK_VERSION)

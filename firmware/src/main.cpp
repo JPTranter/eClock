@@ -19,7 +19,7 @@
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango88.h"  // 88pt Chango for time digits (0-9, :)
+#include "FontTitanOne.h"  // 104pt Titan One for time digits (0-9, :)
 
 GxEPD2_BW<GxEPD2_290_T94_V2, GxEPD2_290_T94_V2::HEIGHT> display(
     GxEPD2_290_T94_V2(EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));

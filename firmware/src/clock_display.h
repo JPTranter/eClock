@@ -22,7 +22,7 @@
 #include <Fonts/FreeSansBold24pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeSans9pt7b.h>
-#include "FontChango88.h"        // 88pt Chango for the time digits (0-9, :)
+#include "FontTitanOne.h"     // 104pt Titan One for the time digits (0-9, :)
 #include "material_icons.h"      // battery / bolt / sync-status bitmaps
 #include "clock_version.h"       // ECLOCK_VERSION
 #include "clock_logic.h"
@@ -181,7 +181,7 @@ void drawRunningFace(Display& d, const ClockView& v) {
     int16_t tx, ty;
     uint16_t tw, th;
     d.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
-    d.setCursor((d.width() - tw) / 2 - tx, 123);
+    d.setCursor((d.width() - tw) / 2 - tx, FONT_BASELINE);   // baseline from the font header
     d.print(timeBuf);
 
     // --- Top row: single right-aligned sync+power group ----------------------

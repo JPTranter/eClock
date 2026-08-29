@@ -57,6 +57,15 @@ message, and `drawRunningFace` was reworked: the sync + power status is now a si
 right-aligned top group (sync icon flush-top), freeing the bottom row for the message
 (left-aligned, clamped so it never reaches AM/PM). See
 `docs/research/message-feature-design.md` (design record) and LESSONS_LEARNT §31.
+**2026-08-29: v0.3.0 — time font switched to Titan One.** After a 16-font comparison
+against the real 296×128 geometry (`docs/reference/candidate_fonts_comparison.png`),
+the big time font was changed from Chango 88pt (squished + 1.1× vertical stretch) to
+**Titan One 104pt (no squish, no stretch)**, which reads cleaner and fills the panel
+without the squish/stretch machinery. Chewy was evaluated and rejected (it needs no
+squish or its wide glyphs overlap + the colon vanishes). A real generator bug surfaced
+and was fixed: `gfxfont_gen.py` was TOP-aligning the colon (it floated), now it
+BOTTOM-aligns the colon to the digits' baseline; the header is self-describing
+(`// Recipe:`, `// Colon:`, `#define FONT_BASELINE`). See LESSONS_LEARNT §34.
 
 ## Honest state of play
 
@@ -82,7 +91,7 @@ right-aligned top group (sync icon flush-top), freeing the bottom row for the me
 || Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 || CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
-|| Firmware version | **Added.** `ECLOCK_VERSION` (default **0.2.0**, CI-injected) shown at the bottom left of the syncing screen. |
+|| Firmware version | **Added.** `ECLOCK_VERSION` (default **0.3.0**, CI-injected) shown at the bottom left of the syncing screen. |
 || Release artifacts | **Fixed + verified on-device.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. The UF2 now uses the canonical spec layout (familyID@24, magicEnd@508) — root cause of the old non-flashing UF2 (old converter put familyID@32/payload@44). **Proven 2026-08-28**: the release UF2 was verified canonical and the same image flashed to the physical board via serial DFU → app up (COM10 = 8045). Note: UF2 drag-and-drop over the MSC drive crashes this bootloader on this machine (see §6) — serial DFU is the reliable flash path. `v0.2.0` ships the good artifact. See `docs/lessons/2026-08-28-phase9-uf2-verified.md`. |
 
 ## Immediate next steps

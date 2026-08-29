@@ -9,7 +9,7 @@
 // 296 wide x 128 tall (the panel is physically 128x296 portrait, driven in
 // landscape via setRotation(1)).
 //
-// GFXcanvas1 rasterizes the real fonts (FontChango88.h, FreeSans) and the
+// GFXcanvas1 rasterizes the real fonts (FontTitanOne.h, FreeSans) and the
 // material_icons bitmaps through Adafruit_GFX, so the buffer is byte-for-byte
 // what the device would render. getBuffer() is exposed for PNG dumps.
 //
