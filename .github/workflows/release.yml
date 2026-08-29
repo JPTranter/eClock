@@ -47,8 +47,9 @@ jobs:
           # -c path wrote the family ID into the fileSize slot and omitted the
           # magic end, so the .uf2 did not flash; hex_to_uf2.py writes the header
           # correctly.)
+          # The FAT16 bootloader filesystem requires an 8.3 filename.
           python firmware/tools/hex_to_uf2.py "release/eClock-${TAG}.hex" \
-            "release/eClock-${TAG}.uf2" --base 0x27000 --family 0xada52840
+            "release/ECLOCK.UF2" --base 0x27000 --family 0xada52840
         env:
           TAG: ${{ steps.ver.outputs.tag }}
 
@@ -64,9 +65,9 @@ jobs:
             Build of the device-side firmware for the XIAO BLE nRF52840 + EN05 ePaper clock
             (version shown at the bottom left of the syncing screen).
 
-            - **`eClock-<tag>.uf2`** — drag-and-drop onto the `XIAO-BOOT` mass-storage drive
+            - **`ECLOCK.UF2`** — drag-and-drop onto the `XIAO-BOOT` mass-storage drive
               to flash. **The bootloader auto-reboots into the app ~1 s after the copy
-              completes** (the filename does not matter as long as it is not `CURRENT.UF2`).
+              completes**. (This is an 8.3-compliant filename which works reliably with the bootloader's FAT16 filesystem).
             - **`eClock-<tag>.hex`** — flash via serial DFU (the reliable path).
             - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
 
