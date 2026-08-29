@@ -51,7 +51,7 @@
 #if defined(ECLOCK_CORE_MBED)
 #define EPD_CS    7     // D7 is index 7
 #define EPD_DC    32    // P0.31 is index 32
-#define EPD_RST   33    // P0.15 is index 33 (custom added)
+#define EPD_RST   29    // P0.15 (Dynamically mapped over D29 in setup)
 #define EPD_BUSY  3     // D3 is index 3
 #define EPD_POWER 6     // D6 is index 6
 #else

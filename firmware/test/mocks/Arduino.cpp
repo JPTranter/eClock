@@ -1,8 +1,11 @@
 // Arduino.cpp — host-test mock implementations for the Arduino core API.
 
 #include "Arduino.h"
-
+#include "pinDefinitions.h"
 #include <vector>
+
+PinDescription g_APinDescription[64];
+
 
 // ---- FakeClock state ---------------------------------------------------------
 static uint32_t g_millis = 0;

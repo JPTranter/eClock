@@ -6,6 +6,8 @@
 
 #if defined(ECLOCK_CORE_MBED)
 #include <ArduinoBLE.h>
+#include "USB/PluggableUSBDevice.h"   // for PluggableUSBD().deinit() (USB clean-detach)
+#include "pinDefinitions.h"           // for PinDescription
 #else
 #error "Must compile with mbed core for ArduinoBLE!"
 #endif
@@ -350,6 +352,24 @@ static const uint32_t TICK_INTERVAL = 60000;  // Advance time once per minute
 
 // ==== Setup ====================================================================
 void setup() {
+    // Cleanly detach the USB device before any display/SPI/GPIO work. Without
+    // this, the bootloader hands off a USB peripheral that the app never takes
+    // over (Serial.begin() is intentionally omitted for power savings), so the
+    // host is left mid-descriptor and Windows reports "USB device not
+    // recognized / Device Descriptor Request Failed" (Code 43). De-initialising
+    // the USB device drops the D+ pull-up so the host sees a clean unplug
+    // instead of a failed descriptor. (Issue #1 — verified 2026-08-29.)
+#if defined(ECLOCK_CORE_MBED)
+    PluggableUSBD().deinit();
+    delay(100);
+
+    // The mbed SEEED_XIAO_NRF52840_SENSE variant does not define the Plus board's
+    // extra pins (P0.15 / P0.31). We dynamically map P0.15 over the unused D29
+    // (index 29) so GxEPD2 can toggle EPD_RST (P0.15) natively using Arduino indices.
+    extern PinDescription g_APinDescription[];
+    g_APinDescription[29].name = P0_15;
+#endif
+
     pinMode(LED_RED, OUTPUT);
     pinMode(LED_GREEN, OUTPUT);
     pinMode(LED_BLUE, OUTPUT);

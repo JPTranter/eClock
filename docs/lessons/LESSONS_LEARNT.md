@@ -187,7 +187,11 @@ To get BLE working without risking a physical bootloader re-flash, you must use 
 
 ### Getting the Display Working on mbed
 Because the mbed core doesn't officially have a variant definition for the XIAO nRF52840 **Plus** (only the base/Sense model), the extra pins (`D11..D19`) are missing from its Arduino pin mapping array (`g_APinDescription`).
-To get `GxEPD2` to toggle the reset pin (`P0.15`), we had to manually patch `~/.platformio/packages/framework-arduino-mbed-seeed/variants/SEEED_XIAO_NRF52840_SENSE/variant.cpp` to append `{ P0_15, NULL, NULL, NULL }` to the end of the array (becoming index 33). We then passed index `32` for `P0.31` (DC) and index `33` for `P0.15` (RST) in `board_pins.h`.
+**Do not manually patch the `variant.cpp` file in `~/.platformio`.** If the environment is ever refreshed (or on a clean CI machine), the patch is lost. This results in out-of-bounds array accesses when `GxEPD2` tries to toggle the reset pin, causing instant freezes on boot and broken USB enumeration.
+**The Fix:** We dynamically remap an unused pin index to `P0.15` in `setup()`. We use `D29` (index 29) since we don't use NFC.
+1. In `board_pins.h`, use index 29 for `EPD_RST`.
+2. In `main.cpp`, add `extern PinDescription g_APinDescription;` and `g_APinDescription[29].name = P0_15;` before initializing the display.
+This allows `GxEPD2` to properly toggle the physical reset pin safely and portably.
 
 ### ArduinoBLE requires strict non-blocking loops
 The `ArduinoBLE` stack on mbed requires frequent calls to `BLE.poll()` to handle background GATT events. **Never use `delay()`** or any blocking functions in the main loop or characteristic callbacks.
