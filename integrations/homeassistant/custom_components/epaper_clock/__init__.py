@@ -107,6 +107,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                         month=datetime.now().month,
                         day=datetime.now().day,
                         year=datetime.now().year,
+                        weekday=datetime.now().weekday(),
                     )
                     message_text = truncate_message(message_text, MAX_MESSAGE_CHARS)
                     payload_msg = encode_message(message_text, MAX_MESSAGE_CHARS)

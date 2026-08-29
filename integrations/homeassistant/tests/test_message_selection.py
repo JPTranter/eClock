@@ -128,3 +128,67 @@ def test_parse_messages_skips_invalid():
 def test_parse_messages_empty_or_none():
     assert parse_messages(None) == []
     assert parse_messages([]) == []
+
+
+# ---- weekday messages -------------------------------------------------------
+
+def test_weekday_message_shows_on_that_weekday():
+    # weekday=4 -> Friday (datetime.weekday(): Mon=0 .. Sun=6).
+    msgs = parse_messages([{"message": "Thank God it's Friday!", "weekday": 4}])
+    assert len(msgs) == 1
+    assert msgs[0].weekday == 4
+    assert select_message(msgs, 6, 21, 2024, weekday=4) == "Thank God it's Friday!"
+    # Does not show on other weekdays.
+    assert select_message(msgs, 6, 21, 2024, weekday=3) is None
+
+
+def test_date_message_overrides_weekday_message():
+    # A date-based message (annual or one-off) on today beats a weekday message.
+    msgs = parse_messages(
+        [
+            {"message": "Thank God it's Friday!", "weekday": 4},
+            {"message": "A special Friday", "month": 6, "day": 21, "year": 2024},
+        ]
+    )
+    # Friday 21 Jun 2024: date message overrides the weekday message.
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "A special Friday"
+    # Friday 28 Jun 2024: no date message -> weekday message is the fallback.
+    assert select_message(msgs, month=6, day=28, year=2024, weekday=4) == "Thank God it's Friday!"
+
+
+def test_weekday_message_is_fallback():
+    msgs = parse_messages(
+        [
+            {"message": "Thank God it's Friday!", "weekday": 4},
+            {"message": "Merry Christmas", "month": 12, "day": 25},
+        ]
+    )
+    # Christmas 25 Dec 2024 (a Wednesday) -> date message wins over nothing.
+    assert select_message(msgs, month=12, day=25, year=2024, weekday=3) == "Merry Christmas"
+    # 20 Dec 2024 (a Friday) is not Christmas -> weekday message shows.
+    assert select_message(msgs, month=12, day=20, year=2024, weekday=4) == "Thank God it's Friday!"
+
+
+def test_weekday_last_match_wins():
+    msgs = parse_messages(
+        [
+            {"message": "First Friday", "weekday": 4},
+            {"message": "Second Friday", "weekday": 4},
+        ]
+    )
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "Second Friday"
+
+
+def test_weekday_mixed_with_date_last_wins_within_group():
+    # Among date-based messages, last wins; weekday only used if no date match.
+    msgs = parse_messages(
+        [
+            {"message": "Thank God it's Friday!", "weekday": 4},
+            {"message": "Annual A", "month": 6, "day": 21},
+            {"message": "One-off B", "month": 6, "day": 21, "year": 2024},
+        ]
+    )
+    # 21 Jun 2024: date messages match; the LAST (One-off B) wins over Annual A.
+    assert select_message(msgs, month=6, day=21, year=2024, weekday=4) == "One-off B"
+    # 28 Jun 2024: no date match -> weekday.
+    assert select_message(msgs, month=6, day=28, year=2024, weekday=4) == "Thank God it's Friday!"

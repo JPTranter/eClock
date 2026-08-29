@@ -10,10 +10,17 @@ Allow Home Assistant to push a small text message (e.g. "Merry Christmas",
 
 ## Scope decisions (from the discussion)
 - **Source:** Home Assistant provides the message (global — same for all clocks).
-- **Config in HA:** a list of `{ message, month, day, year? }`. If `year` present,
-  it fires that one date; if absent, it fires every year on that month/day.
+- **Config in HA:** a list of rules, each EITHER date-based or weekday-based:
+  - Date-based: `{ message, month, day, year? }`. No `year` → fires every year
+    (annual, e.g. Christmas); with `year` → fires that one date only (one-off).
+  - Weekday-based: `{ message, weekday }` (weekday 0=Monday .. 6=Sunday, matching
+    `datetime.weekday()`). Fires every week on that day — a **fallback**.
 - **Message length cap:** **30 characters.** (Fits the whitespace before AM/PM with
   a 2-char margin; see below.)
+- **Selection precedence:** a date-based message matching today WINS over a weekday
+  message; if no date rule matches, the weekday message for today is the fallback.
+  Within each group, the LAST matching entry in the list wins (a one-off can override
+  an annual; a later weekday entry overrides an earlier one).
 - **Where it displays:** the date/battery/sync stay on a single top row; the message
   occupies the freed bottom row, **left-aligned at x=2**, with AM/PM at the right.
 - **Backward compatibility:** the message must be an **additive** BLE characteristic

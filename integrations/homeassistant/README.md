@@ -48,7 +48,7 @@ adapter or ESPHome Bluetooth proxy within range of the clock.
 
 Since HA v0.2.0, the component can push a short text message that the clock displays
 on the bottom row (e.g. holiday greetings, a birthday). Configure a `messages:` list;
-each entry is `{message, month, day, year?}`:
+each entry is EITHER date-based or weekday-based:
 
 ```yaml
 epaper_clock:
@@ -67,13 +67,21 @@ epaper_clock:
       month: 3
       day: 14
       year: 2026
+    # Weekly: a weekday (0=Monday .. 6=Sunday) -> fires every week on that day.
+    # This is a FALLBACK: a date-based message that matches today overrides it.
+    - message: "God is good, go to church!"
+      weekday: 6
 ```
 
 Behaviour:
 - The message is selected by **Home Assistant's local date** (so it follows HA's
   timezone, matching the date the clock shows).
-- If **two** entries match the same day, the **last one in the list** wins — so a
-  specific `year`-scoped entry listed after an annual one overrides it that year.
+- **Precedence:** a date-based message (`month`/`day`, with optional `year`) that
+  matches today **wins** over a weekday message. If no date rule matches, the
+  weekday message for today's weekday is shown as the fallback.
+- If **two** entries match the same day/weekday, the **last one in the list** wins —
+  so a specific `year`-scoped entry listed after an annual one overrides it that
+  year.
 - If **no** entry matches today, an all-NUL payload is written so the clock clears
   the line (shows its normal clock face).
 - Messages are **truncated to 30 characters** on the HA side before sending (the
