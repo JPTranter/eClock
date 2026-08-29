@@ -20,7 +20,7 @@ what it means.
 
 ### The clock face (the one you'll see every day)
 
-![The clock face](screenshots/running.png)
+<img src="screenshots/running.png" alt="The clock face" width="296">
 
 | Where | What it is |
 | --- | --- |
@@ -32,7 +32,7 @@ what it means.
 
 ### The syncing screen (first few seconds after power-on)
 
-![The syncing screen](screenshots/syncing.png)
+<img src="screenshots/syncing.png" alt="The syncing screen" width="296">
 
 The clock is waiting for a Home Assistant device to send it the correct time. The
 address at the bottom right is its Bluetooth address — used once, when you first set
@@ -41,7 +41,7 @@ clock face appears as soon as it has a valid time.
 
 ### The "No Time!" screen (only if it can't sync)
 
-![The "No Time!" screen](screenshots/no_time.png)
+<img src="screenshots/no_time.png" alt="The No Time screen" width="296">
 
 The clock booted but nobody sent it the time within a few seconds. Don't worry —
 just press any button and it will try again. This screen rarely appears once setup is
@@ -49,7 +49,7 @@ complete.
 
 ### The sleep screen (overnight)
 
-![The sleep screen](screenshots/sleeping.png)
+<img src="screenshots/sleeping.png" alt="The sleep screen" width="296">
 
 Between **11pm and 5am** the clock turns its display off to save battery and shows a
 big **"Zzz"** with the word *Sleeping* beneath it. It wakes itself at 5am, fully
@@ -71,7 +71,7 @@ described as you actually see them on the panel.
 | **A lightning-bolt icon** | Plugged into USB / charger. It's charging — no percentage shown because it's running off the wire, not the cell. |
 | **An *empty* battery icon (no fill) with a low number** | Battery running low — **charge it soon** (see "Charging" below). |
 
-![Charging over USB](screenshots/running_usb.png)   ![Running on a low battery](screenshots/running_low_battery.png)
+<img src="screenshots/running_usb.png" alt="Charging over USB" width="296"> <img src="screenshots/running_low_battery.png" alt="Running on a low battery" width="296">
 
 Because the panel barely uses power, a full charge lasts months — you'll rarely think
 about the battery. But the clock gives you two clear heads-ups before it runs out
@@ -98,7 +98,7 @@ which wins over a default message. When nothing applies, the bottom row is blank
 (normal clock face). Messages are capped at 30 characters so they never crowd the
 AM/PM display.
 
-![A message on the clock face](screenshots/message.png)
+<img src="screenshots/message.png" alt="A message on the clock face" width="296">
 
 ### Every top-right combination
 
@@ -106,7 +106,7 @@ The top-right group shows the sync status together with the power state. Here's 
 combination at a glance (the sync icon is always flush at the top, and the battery /
 bolt icon aligns with it):
 
-![All sync and power state combinations](screenshots/state_matrix_approval.png)
+<img src="screenshots/state_matrix_approval.png" alt="All sync and power state combinations" width="240">
 
 ---
 
@@ -127,7 +127,7 @@ the number drops. That's your cue to plug it in sometime in the next week or two
 gets down to the last few percent, the clock replaces the clock face entirely with
 this:
 
-![The final low-battery screen](screenshots/low_battery.png)
+<img src="screenshots/low_battery.png" alt="The final low-battery screen" width="296">
 
 The moment you see this, **it's time to charge now.** Because this message is drawn
 onto the ePaper panel and the panel holds its image without power, it stays right
