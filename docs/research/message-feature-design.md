@@ -87,13 +87,24 @@ The message must **never collide with AM/PM**. From measurement:
 Keep it until implementation is complete, as the design history.
 
 ## Backend / protocol (for implementation)
-- Add a new writable BLE characteristic for the message (separate UUID), on top of the
+- New writable BLE characteristic for the message (separate UUID), on top of the
   existing Current Time characteristic.
 - HA writes time (0x2A2B, 8 bytes) first, then the message to the new characteristic
   best-effort.
-- Firmware caches the current day's message; if `year` present and today is that date,
-  render; else blank (normal clock face).
+- Firmware caches the current message string and renders it on the bottom row.
 
-## Open items before implementation
-- Exact new characteristic UUID + value format (fixed 30-char? null-padded? length-prefixed?).
-- HA config schema (list of `{message, month, day, year?}`) and where it's declared.
+## Implemented contract (resolved open items)
+- **Characteristic UUID:** `c0dec10c-2a2c-4a20-8c10-000000000000` (custom 128-bit,
+  additive; never touches the 8-byte `0x2A2B` time sync).
+- **Value format:** fixed-width **30-byte NUL-padded ASCII** payload. HA truncates to
+  30 chars (server-side); the firmware reads up to 30 bytes, stops at the first NUL,
+  and NUL-terminates. An all-NUL payload clears the line.
+- **HA config:** `epaper_clock:` with a `messages:` list — natural `day:` rules
+  (default / weekly / `day: "25 Dec"` annual / `day: "14 Mar 2026"` one-off) as
+  documented above. Invalid entries are logged as errors in HA.
+- **Firmware render:** message rendered **left-aligned at x=2** on the freed bottom
+  row, baseline y=121, clamped so it never collides with AM/PM. `drawRunningFace`
+  was reworked to the settled layout: single right-aligned top group
+  `[date] [sync time?][sync icon]<2px>[%][battery icon]` with the sync icon top edge
+  flush at y=0 and text baseline 14, and the previous bottom-left sync status removed
+  (it moved up into the group).

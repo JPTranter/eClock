@@ -34,6 +34,41 @@ namespace clock_display {
 constexpr uint16_t kBlack = 0x0000;
 constexpr uint16_t kWhite = 0xFFFF;
 
+// Return the vertical centre of a bitmap's VISIBLE ink (rows that have at least
+// one non-zero bit). Several icons (e.g. the battery) have blank padding rows at
+// the bottom, so their bounding-box centre does NOT equal their visible-ink
+// centre. Aligning by visible ink is what makes text/icons look co-centred.
+inline int visibleBitmapCentreY(const uint8_t* bitmap, int w, int h) {
+    int rb = (w + 7) / 8;
+    int first = -1, last = -1;
+    for (int y = 0; y < h; ++y) {
+        bool ink = false;
+        for (int b = 0; b < rb && !ink; ++b) {
+            ink |= (bitmap[y * rb + b] != 0);
+        }
+        if (ink) {
+            if (first < 0) first = y;
+            last = y;
+        }
+    }
+    if (first < 0) return h / 2;   // empty bitmap: fall back to box centre
+    return (first + last) / 2;
+}
+
+// Return the FIRST column (x) of a bitmap that has visible ink. Icons have
+// horizontal padding / sidebearing, so their ink left edge differs from the bitmap
+// origin (column 0). Used to seat neighbouring elements snugly by ink, not box.
+inline int visibleBitmapInkLeft(const uint8_t* bitmap, int w, int h) {
+    int rb = (w + 7) / 8;
+    for (int x = 0; x < w; ++x) {
+        for (int y = 0; y < h; ++y) {
+            int byte = bitmap[y * rb + (x >> 3)];
+            if (byte & (0x80 >> (x & 7))) return x;
+        }
+    }
+    return 0;   // empty bitmap
+}
+
 // Everything a screen needs to know about the clock, passed by value so the
 // renderers are pure functions of their inputs.
 struct ClockView {
@@ -65,6 +100,11 @@ struct ClockView {
     // Firmware version string (e.g. "v0.1.0"), shown at the bottom left of the
     // syncing screen. "" hides it.
     const char* version;
+
+    // Bottom-row message pushed by Home Assistant (NUL-terminated, up to
+    // MESSAGE_MAX_CHARS). "" (or nullptr) hides it. The caller owns the string and
+    // keeps it alive for the duration of the draw.
+    const char* message;
 };
 
 // Draw the "No Time!" error screen (boot failed to sync).
@@ -112,8 +152,13 @@ void drawSyncingScreen(Display& d, const ClockView& v) {
     }
 }
 
-// Draw the running clock face: date + battery on top, big time, sync status
-// + AM/PM below. Shared by RUNNING and by SYNCING/RESYNCING with a valid time.
+// Draw the running clock face (the settled layout):
+//   Top row (single right-aligned group):
+//     [date]                        [sync time?][sync icon]<-2px->[%][battery icon]
+//   - sync icon top edge flush at y=0, text baseline = 14.
+//   Middle: big time (unchanged).
+//   Bottom row: HA message left-aligned at x=2 (clamped so it never reaches AM/PM),
+//   AM/PM at the bottom-right.
 template <typename Display>
 void drawRunningFace(Display& d, const ClockView& v) {
     // Convert 24h to 12h display, suppress leading zero.
@@ -130,82 +175,139 @@ void drawRunningFace(Display& d, const ClockView& v) {
     char dateBuf[32];
     strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
 
-    // Date line at the top left.
-    d.setFont(&FreeSans9pt7b);
-    d.setCursor(2, 12);
-    d.print(dateBuf);
-
-    // Battery line at the top right.
-    if (v.batteryPercent < 0) {
-        // USB power: bolt icon only, no text.
-        d.drawBitmap(d.width() - 2 - icon_bolt_w, 2,
-            icon_bolt_bitmap, icon_bolt_w, icon_bolt_h, kBlack);
-    } else {
-        // Battery icon + percentage. Below the low threshold the icon swaps to
-        // the empty-battery glyph so the low state is obvious at a glance.
-        bool low = clock_logic::isLowBattery(v.batteryPercent);
-        const uint8_t* bmp = low ? icon_battery_empty_bitmap : icon_battery_bitmap;
-        uint8_t icon_w = low ? icon_battery_empty_w : icon_battery_w;
-        uint8_t icon_h = low ? icon_battery_empty_h : icon_battery_h;
-        char pctBuf[8];
-        snprintf(pctBuf, sizeof(pctBuf), "%d%%", v.batteryPercent);
-        d.setFont(&FreeSans9pt7b);
-        int16_t bx, by;
-        uint16_t bw, bh;
-        d.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
-        // 6px gap between the battery icon and the percentage.
-        int text_x = d.width() - 2 - icon_w - 6 - bw;
-        int icon_x = d.width() - 2 - icon_w;
-        d.drawBitmap(icon_x, 2, bmp, icon_w, icon_h, kBlack);
-        d.setCursor(text_x, 12);
-        d.print(pctBuf);
-    }
-
-    // Big time digits, centred.
+    // --- Big time digits, centred (unchanged) --------------------------------
     d.setFont(&font);
     d.setTextWrap(false);
     int16_t tx, ty;
     uint16_t tw, th;
     d.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
-    // Top text bottom edge is ~16; bottom text top edge is ~114. Available
-    // space is 98 px, centered at 65. Chango 88pt has yOff=-90, h=64, so the
-    // ink centre relative to the baseline is -58, giving a baseline of 123.
     d.setCursor((d.width() - tw) / 2 - tx, 123);
     d.print(timeBuf);
 
-    // Status icon + last sync time at the bottom left.
-    uint8_t icon_w, icon_h;
-    const uint8_t* icon_bmp;
-    if (v.isSyncing) {
-        icon_bmp = icon_syncing_bitmap;
-        icon_w = icon_syncing_w;
-        icon_h = icon_syncing_h;
-    } else if (v.lastSyncFailed) {
-        icon_bmp = icon_failed_bitmap;
-        icon_w = icon_failed_w;
-        icon_h = icon_failed_h;
-    } else {
-        icon_bmp = icon_synced_bitmap;
-        icon_w = icon_synced_w;
-        icon_h = icon_synced_h;
-    }
-    int icon_y = d.height() - 2 - 10 - icon_h / 2;   // centred, 2px bottom margin
-    d.drawBitmap(2, icon_y, icon_bmp, icon_w, icon_h, kBlack);
-
-    // Last successful sync time to the right of the icon.
-    char syncTime[8];
-    snprintf(syncTime, sizeof(syncTime), "%02u:%02u",
-             v.lastSyncHour, v.lastSyncMinute);
+    // --- Top row: single right-aligned sync+power group ----------------------
+    const int kBaseline = 14;         // top-row text baseline (aligns with flush-top icon)
+    const int kRightMargin = 2;       // right anchor margin
     d.setFont(&FreeSans9pt7b);
-    d.setCursor(2 + icon_w + 2, d.height() - 2 - 5);
-    d.print(syncTime);
 
-    // AM/PM at the bottom right.
+    // Date (top-left) at the group baseline.
+    d.setCursor(2, kBaseline);
+    d.print(dateBuf);
+
+    // Choose the sync/power icons.
+    uint8_t sync_w, sync_h;
+    const uint8_t* sync_bmp;
+    if (v.isSyncing)      { sync_bmp = icon_syncing_bitmap; sync_w = icon_syncing_w; sync_h = icon_syncing_h; }
+    else if (v.lastSyncFailed) { sync_bmp = icon_failed_bitmap; sync_w = icon_failed_w; sync_h = icon_failed_h; }
+    else                  { sync_bmp = icon_synced_bitmap; sync_w = icon_synced_w; sync_h = icon_synced_h; }
+
+    bool low = clock_logic::isLowBattery(v.batteryPercent);
+    const uint8_t* batt_bmp = low ? icon_battery_empty_bitmap : icon_battery_bitmap;
+    uint8_t batt_w = low ? icon_battery_empty_w : icon_battery_w;
+    uint8_t batt_h = low ? icon_battery_empty_h : icon_battery_h;
+
+    // The shared horizontal centre line for the whole group. The sync/power icons are
+    // drawn flush at the top (top edge y=0) and aligned to a FIXED centre line, so the
+    // group is stable regardless of which sync glyph is active. (The synced/failed
+    // glyphs share visible centre 8.0 when flush; ``syncing`` is a shorter glyph, so we
+    // must NOT derive the line from it or the whole group jumps up.)
+    const int kGroupCentreY = 8;
+
+    // Build right-to-left: battery icon at the right edge, then %, then sync icon,
+    // then (if failed) the last-sync time — all right-anchored with fixed ink gaps.
+    int x = d.width() - kRightMargin - batt_w;
+    int pct_ink_left = x;   // % text ink left edge (== battery left edge if no %)
+
+    // USB (batteryPercent < 0): bolt instead of battery, no %.
+    if (v.batteryPercent < 0) {
+        int bolt_c = visibleBitmapCentreY(icon_bolt_bitmap, icon_bolt_w, icon_bolt_h);
+        d.drawBitmap(x, kGroupCentreY - bolt_c, icon_bolt_bitmap,
+                     icon_bolt_w, icon_bolt_h, kBlack);
+        // Seat the sync icon against the bolt's INK left edge (the bolt has blank
+        // left padding, so align by ink, not the bitmap origin).
+        int bolt_ink_left = x + visibleBitmapInkLeft(icon_bolt_bitmap, icon_bolt_w, icon_bolt_h);
+        pct_ink_left = bolt_ink_left;
+        x -= icon_bolt_w;
+    } else {
+        // Align the battery's VISIBLE ink centre with the group centre line
+        // (1px higher so it sits just above the text baseline of the others).
+        int batt_c = visibleBitmapCentreY(batt_bmp, batt_w, batt_h);
+        d.drawBitmap(x, kGroupCentreY - batt_c - 1, batt_bmp, batt_w, batt_h, kBlack);
+
+        // % text, seat it by INK: the % glyph has left sidebearing, so getTextBounds
+        // returns an ink offset (bx) relative to the box origin. Ink spans
+        // [box_x+bx, box_x+bx+bw]. Place the box so the ink RIGHT edge lands kWghtGap
+        // px left of the battery's left edge (x).
+        char pctBuf[8];
+        snprintf(pctBuf, sizeof(pctBuf), "%d%%", v.batteryPercent);
+        int16_t bx, by;
+        uint16_t bw, bh;
+        d.getTextBounds(pctBuf, 0, 0, &bx, &by, &bw, &bh);
+        const int kWghtGap = 3;          // ink gap % -> battery icon
+        int pct_x = x - kWghtGap - (bx + bw);
+        d.setCursor(pct_x, kBaseline);
+        d.print(pctBuf);
+        pct_ink_left = pct_x + bx;       // % ink left edge
+        x = pct_x;
+    }
+
+    // Sync icon: seat it so its ink right edge is ~2px left of the % text's ink left
+    // edge. The sync icon is flush at the top.
+    const int kSyncGap = 2;              // ink gap sync icon -> %
+    int sync_x = (pct_ink_left - kSyncGap) - sync_w;
+    d.drawBitmap(sync_x, 0, sync_bmp, sync_w, sync_h, kBlack);  // icon top flush at y=0
+    x = sync_x;
+
+    // Last-sync time, only when the last sync failed (so the user sees how stale).
+    if (v.lastSyncFailed) {
+        char syncTime[8];
+        snprintf(syncTime, sizeof(syncTime), "%02u:%02u",
+                 v.lastSyncHour, v.lastSyncMinute);
+        int16_t sx, sy;
+        uint16_t sw, shh;
+        d.getTextBounds(syncTime, 0, 0, &sx, &sy, &sw, &shh);
+        d.setCursor(x - 2 - sw, kBaseline);
+        d.print(syncTime);
+    }
+
+    // --- Bottom row: HA message (left-aligned) + AM/PM -----------------------
+    // AM/PM at the bottom-right.
     int16_t apx, apy;
     uint16_t apw, aph;
     d.getTextBounds(ampm, 0, 0, &apx, &apy, &apw, &aph);
-    d.setCursor(d.width() - apw - 2, d.height() - 2 - 4);
+    int ampm_left = d.width() - apw - 2;
+    d.setCursor(ampm_left, d.height() - 2 - 4);
     d.print(ampm);
+
+    // Message left-aligned at x=2, clamped so its ink right edge stays at least a
+    // small gap (>= 2 whitespace chars) left of AM/PM. If it overflows, we drop
+    // trailing characters rather than let it collide.
+    if (v.message && v.message[0]) {
+        d.setFont(&FreeSans9pt7b);
+        d.setCursor(2, d.height() - 2 - 5);
+        // Determine how many characters fit before the AM/PM gap.
+        int max_right = ampm_left - 4;   // >= a couple px gap before AM/PM
+        int best_end = 0;
+        for (const char* p = v.message; *p && *p != '\n'; ++p) {
+            // measure the prefix up to and including this char
+            char tmp[40];
+            int n = 0;
+            for (const char* q = v.message; q <= p && n < (int)sizeof(tmp) - 1; ++q) {
+                tmp[n++] = *q;
+            }
+            tmp[n] = '\0';
+            int16_t ccx, ccy;
+            uint16_t ccw, cch;
+            d.getTextBounds(tmp, 0, 0, &ccx, &ccy, &ccw, &cch);
+            if (2 + ccw > max_right) break;
+            best_end = n;
+        }
+        if (best_end > 0) {
+            char clipped[40];
+            memcpy(clipped, v.message, best_end);
+            clipped[best_end] = '\0';
+            d.print(clipped);
+        }
+    }
 }
 
 // Draw the sleeping placeholder ("Zzz"). drawClockFace() uses this for the

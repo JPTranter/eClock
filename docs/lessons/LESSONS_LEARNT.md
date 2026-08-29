@@ -1438,3 +1438,72 @@ test for the "the tick *after* the failure" is what closes the gap.
 write the test to run the full scenario (sync → interval → resync → timeout → *one more
 loop*) rather than asserting a single transition. That's what made the failure
 reproducible and the fix verifiable.
+
+---
+
+## 31. Bottom-message feature & the reworked clock-face layout (verified 2026-08-29)
+
+Added an HA-pushed **bottom message** (e.g. a holiday greeting or weekly reminder) and
+reworked `drawRunningFace` to the settled layout in `docs/research/message-feature-design.md`.
+
+### The wire contract (shared HA <-> firmware)
+- **New additive characteristic** `c0dec10c-2a2c-4a20-8c10-000000000000` — never touch
+  the 8-byte `0x2A2B` time sync. Old firmware ignores it; HA writes time first, then the
+  message best-effort (its write failure must not block the time sync).
+- **Value format:** fixed-width **30-byte NUL-padded ASCII**. HA truncates to 30 chars;
+  the firmware reads up to 30 bytes, stops at the first NUL, NUL-terminates. All-NUL
+  clears the line. This makes the buffer length trivially safe at both ends.
+- **Custom 128-bit UUID** was chosen (not a 16-bit sibling of 0x2A2B) to avoid any clash
+  with a Bluetooth SIG assignment, and because a 16-bit char in the same service would
+  be ambiguous on the wire.
+
+### Config (HA side) — natural `day:` rules, only two keys allowed
+```yaml
+epaper_clock:
+  messages:
+    - message: "God is good"            # default (no rule) — lowest precedence
+    - message: "Thank God it's Friday!" # weekly
+      day: Fri
+    - message: "Merry Christmas"        # annual
+      day: 25 Dec
+    - message: "Happy Birthday Sam"     # one-off (highest among date rules)
+      day: 14 Mar 2026
+```
+- **Precedence:** one-off/annual matching today > weekday > default; within each group
+  LAST list entry wins (a one-off can override an annual on the same date).
+- `day` is case-insensitive; weekday/month names supported. **Only `message` and `day`
+  keys are accepted.** Entries with a missing/blank message, an unknown key, or an
+  unparseable `day` are reported as errors in the HA log and skipped — never silently
+  turned into a default.
+
+### Layout lessons
+- The top row is now a **single right-aligned group**:
+  `[date]  [sync time?][sync icon]<2px>[%][battery icon]` — not independently-positioned
+  elements. The sync icon top edge is flush at y=0; the other icons/text are aligned to
+  it. The old bottom-left sync status moved up into the group.
+- **Text/icon vertical alignment is by VISIBLE INK, not the glyph bounding box.** The %,
+  battery, and sync glyphs have different heights and blank padding rows, so aligning
+  nominal centres looked wrong; aligning visible-ink centres (measured) is what looked
+  right. Same for the message left-edge: `getTextBounds` box != ink, so seat spacers by
+  measured ink.
+- **The bottom message is clamped at render time** so it never reaches AM/PM (measured:
+  30 chars leaves a ≥2-char margin). HA also truncates to 30 server-side — belt and
+  braces.
+
+### Testing
+- The pure selection logic is unit-tested (pytest) in `integrations/homeassistant/tests/`
+  — no HA needed. `parse_messages` returns `(messages, errors)` so the HA layer logs
+  invalid lines.
+- The firmware message write + render are covered by host tests (store/clear/clamp, and
+  PNG renders). The BLE mock was extended to hold multiple characteristics, and the
+  harness gained `simulateBleMessageWrite()` + `message()`.
+
+**Key lesson:** when adding a paired HA + firmware feature, define the wire contract
+first (UUID, value format, NUL-padding, truncation) and keep it **additive** so older
+devices are unaffected. Render-side, measure by *ink* not by *box* when placing text
+next to icons.
+
+> **Note on earlier layout lessons:** §17/§18 (the old "status line at the bottom
+> left / icons at the bottom left" descriptions, verified 2026-08-23/24) describe the
+> PREVIOUS layout and are superseded by this rework — sync status is now a single
+> right-aligned group at the top, and the bottom row holds the message.

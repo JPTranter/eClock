@@ -49,6 +49,9 @@
   `drawSleepIcon()`). `docs/screenshots/sleeping.png` must be the **overnight** screen
   (`sleep_icon.png`), since `docs/USER_GUIDE.md` describes it as "Zzz" with *Sleeping*
   beneath it.
+  **The message render:** `docs/screenshots/message.png` is produced by the
+  `BottomMessageRenders` test in `test_clock_display.cpp` (`output/cd_running_message.png`);
+  if you change the bottom-message layout, regenerate it too.
 - **Keep pin numbers in sync.** `docs/hardware/PINOUT.md` and `docs/lessons/*` both
   document the pin mapping. When `firmware/include/board_pins.h` changes, update every
   table/note that mentions `EPD_CS`/`EPD_DC`/`EPD_RST`/`EPD_BUSY`/`EPD_POWER` in both.

@@ -51,6 +51,7 @@ public:
         g_ble_initialized = false;
         g_low_battery_lock = false;
         g_button_pending = false;
+        g_message[0] = '\0';                     // no bottom message
         // Drain the button semaphore to count 0.
         while (g_button_sem.try_acquire()) {}
 
@@ -102,6 +103,18 @@ public:
         memcpy(buf + 4, &tz, 4);
         timeCharacteristic.test_simulate_remote_write(buf, 8);
     }
+
+    // Simulate Home Assistant writing the NUL-padded bottom message over BLE.
+    static void simulateBleMessageWrite(const char* msg) {
+        uint8_t buf[MESSAGE_MAX_CHARS] = {0};
+        size_t n = strlen(msg);
+        if (n > MESSAGE_MAX_CHARS) n = MESSAGE_MAX_CHARS;
+        memcpy(buf, msg, n);
+        messageCharacteristic.test_simulate_remote_write(buf, MESSAGE_MAX_CHARS);
+    }
+
+    // The current bottom-message string ("" if none).
+    static const char* message() { return g_message; }
 
     // Simulate a button press: set the pending flag + release the semaphore.
     static void pressButton() {

@@ -79,9 +79,13 @@ class BLEService {
 public:
     BLEService() {}
     BLEService(const char* uuid) { (void)uuid; }
-    void addCharacteristic(BLECharacteristic& c) { _chars[0] = &c; (void)c; }
+    void addCharacteristic(BLECharacteristic& c) {
+        if (_count < MAX_CHARS) { _chars[_count++] = &c; }
+    }
 private:
-    BLECharacteristic* _chars[1];
+    static const int MAX_CHARS = 8;
+    BLECharacteristic* _chars[MAX_CHARS];
+    int _count = 0;
 };
 
 // ---------------------------------------------------------------------------

@@ -32,6 +32,20 @@ BLEService timeService("1805");
 BLECharacteristic timeCharacteristic("2A2B",
     BLEWrite | BLEWriteWithoutResponse | BLENotify | BLERead, 8);
 
+// Bottom-message characteristic (additive; never change the time sync above).
+// This is the custom 128-bit UUID shared with the HA integration. HA writes a
+// fixed-width, NUL-padded ASCII payload of up to MESSAGE_MAX_CHARS bytes.
+// See docs/research/message-feature-design.md.
+static constexpr size_t MESSAGE_MAX_CHARS = 30;   // 30 chars = safe before AM/PM
+BLECharacteristic messageCharacteristic(
+    "c0dec10c-2a2c-4a20-8c10-000000000000",
+    BLEWrite | BLEWriteWithoutResponse, (int)MESSAGE_MAX_CHARS);
+
+// ==== Message state ===========================================================
+// HA pushes a short message shown on the bottom row. Stored as a NUL-terminated
+// C string (the payload arrives NUL-padded). Empty -> nothing shown.
+static char g_message[MESSAGE_MAX_CHARS + 1] = {0};
+
 // ==== State machine ============================================================
 enum ClockState {
     STATE_SYNCING,       // Boot: advertising, waiting for first time sync
@@ -244,7 +258,8 @@ static void drawClockFace() {
             g_ble_initialized,
             mac.c_str(),
             getBatteryPercent(),
-            ECLOCK_VERSION
+            ECLOCK_VERSION,
+            g_message
         };
 
         switch (g_state) {
@@ -410,10 +425,14 @@ g_ble_initialized = true;
     BLE.setDeviceName("ePaper Clock");
     BLE.setAdvertisedService(timeService);
     timeService.addCharacteristic(timeCharacteristic);
+    timeService.addCharacteristic(messageCharacteristic);
     BLE.addService(timeService);
 
     uint8_t init_val[8] = {0};
     timeCharacteristic.writeValue(init_val, sizeof(init_val));
+
+    uint8_t init_msg[MESSAGE_MAX_CHARS] = {0};
+    messageCharacteristic.writeValue(init_msg, sizeof(init_msg));
 
     // Begin first sync attempt — the state is already STATE_SYNCING
     startSyncAttempt();
@@ -458,6 +477,25 @@ void loop() {
             delay(10);
             digitalWrite(LED_GREEN, HIGH);
         }
+    }
+
+    // ---------------------------------------------------------------
+    // 1b. BLE characteristic write: Home Assistant sent us a bottom message.
+    //     Additive and independent of the time sync. Empty (all-NUL) clears it.
+    // ---------------------------------------------------------------
+    if (messageCharacteristic.written()) {
+        int len = messageCharacteristic.valueLength();
+        const uint8_t* val = messageCharacteristic.value();
+        // Copy at most MESSAGE_MAX_CHARS bytes, stopping at the first NUL (the
+        // payload arrives NUL-padded from HA). Ensure NUL-termination.
+        size_t n = (len < (int)MESSAGE_MAX_CHARS) ? (size_t)len : MESSAGE_MAX_CHARS;
+        size_t i = 0;
+        for (; i < n; ++i) {
+            g_message[i] = (char)val[i];
+            if (val[i] == '\0') break;
+        }
+        g_message[i] = '\0';
+        g_needs_display_update = true;
     }
 
     // ---------------------------------------------------------------

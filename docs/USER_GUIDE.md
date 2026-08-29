@@ -25,9 +25,9 @@ what it means.
 | Where | What it is |
 | --- | --- |
 | **Top left** | Today's date |
-| **Top right** | Battery charge (see "Battery" below) |
+| **Top right** | A single group: sync status, battery charge (see "Icons" below) |
 | **Middle** | The time — big, bold, and readable from across the room |
-| **Bottom left** | Sync status + the time it last synced (see "Icons" below) |
+| **Bottom** | A message (e.g. a holiday greeting) — see "Messages" below; otherwise blank |
 | **Bottom right** | AM or PM |
 
 ### The syncing screen (first few seconds after power-on)
@@ -77,16 +77,28 @@ Because the panel barely uses power, a full charge lasts months — you'll rarel
 about the battery. But the clock gives you two clear heads-ups before it runs out
 (see **Charging** below), so you're never caught off guard.
 
-### Sync status (bottom left)
+### Sync status (top right)
 
-Next to the icon is a small two-digit time (e.g. `09:41`) — that's the time of the
-**last successful sync**, so you always know how fresh your clock's time is.
+The sync status icon sits in the top-right group, next to the battery. When the last
+sync **failed**, the clock also shows the time of the **last successful sync** (e.g.
+`09:41`) so you know how stale the time is — otherwise just the icon shows.
 
 | What you see | Meaning |
 | --- | --- |
 | **A white circle with a tick / check mark** | Sync is good. The clock has the correct, up-to-date time. This is the normal "happy" state — you'll see this almost all the time. |
 | **A pair of circular arrows** | The clock is syncing right now — it's talking to Home Assistant for the correct time. |
-| **A circle with an X / cross** | The last sync failed. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry once an hour on its own (or immediately if you press a button). |
+| **A circle with an X / cross** | The last sync failed, showing the last-sync time. The clock still shows the time it has, but it couldn't reach Home Assistant for an update. It'll retry once an hour on its own (or immediately if you press a button). |
+
+### Messages
+
+If configured (via Home Assistant), a short message appears on the bottom row — e.g.
+"Merry Christmas", "Happy Birthday Sam", or a weekly reminder like "Thank God it's
+Friday!". A more specific date (one-off, then annual) wins over a weekday message,
+which wins over a default message. When nothing applies, the bottom row is blank
+(normal clock face). Messages are capped at 30 characters so they never crowd the
+AM/PM display.
+
+![A message on the clock face](screenshots/message.png)
 
 ---
 

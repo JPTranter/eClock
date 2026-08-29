@@ -35,6 +35,7 @@ static ClockView makeView() {
     v.macAddress = "AA:BB:CC:DD:EE:FF";
     v.batteryPercent = 100;
     v.version = ECLOCK_VERSION;
+    v.message = "";
     return v;
 }
 
@@ -93,4 +94,55 @@ TEST(ClockDisplay, LowBatterySwapsToEmptyIcon) {
     v.batteryPercent = 15;   // below the 20% low threshold
     renderAndDump([&] { drawRunningFace(testDisplay, v); },
                   "output/cd_running_low.png");
+}
+
+TEST(ClockDisplay, BottomMessageRenders) {
+    ClockView v = makeView();
+    v.message = "Merry Christmas";
+    renderAndDump([&] { drawRunningFace(testDisplay, v); },
+                  "output/cd_running_message.png");
+}
+
+TEST(ClockDisplay, LongBottomMessageIsClamped) {
+    ClockView v = makeView();
+    // 40-char message: must not collide with AM/PM (clamped).
+    v.message = "Happy Birthday Alexandra Maxime the Third";
+    renderAndDump([&] { drawRunningFace(testDisplay, v); },
+                  "output/cd_running_long_message.png");
+}
+
+// --- Sync x power state matrix (for visual review of the top-right group) -----
+
+TEST(ClockDisplay, StateMatrix) {
+    // Sync OK (full battery, no message) — the baseline running face.
+    ClockView v = makeView();
+    renderAndDump([&] { drawRunningFace(testDisplay, v); }, "output/cd_state_ok.png");
+
+    // Sync OK, low battery (empty icon + low %).
+    ClockView low = makeView();
+    low.batteryPercent = 15;
+    renderAndDump([&] { drawRunningFace(testDisplay, low); }, "output/cd_state_low.png");
+
+    // Syncing (circular-arrows icon), full battery.
+    ClockView syncing = makeView();
+    syncing.isSyncing = true;
+    renderAndDump([&] { drawRunningFace(testDisplay, syncing); }, "output/cd_state_syncing.png");
+
+    // Sync FAILED (cross icon + last-sync time shown), full battery.
+    ClockView failed = makeView();
+    failed.lastSyncFailed = true;
+    failed.lastSyncHour = 9; failed.lastSyncMinute = 41;
+    renderAndDump([&] { drawRunningFace(testDisplay, failed); }, "output/cd_state_failed.png");
+
+    // USB power (bolt icon, no %).
+    ClockView usb = makeView();
+    usb.batteryPercent = -1;
+    renderAndDump([&] { drawRunningFace(testDisplay, usb); }, "output/cd_state_usb.png");
+
+    // Failed + low battery combined.
+    ClockView failLow = makeView();
+    failLow.lastSyncFailed = true;
+    failLow.lastSyncHour = 9; failLow.lastSyncMinute = 41;
+    failLow.batteryPercent = 15;
+    renderAndDump([&] { drawRunningFace(testDisplay, failLow); }, "output/cd_state_fail_low.png");
 }

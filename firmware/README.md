@@ -10,7 +10,7 @@ kept only for reference and does not compile the current `main.cpp`).
 firmware/
   platformio.ini            Board, core, envs, and library definitions
   src/main.cpp              Application entry point: state machine, BLE sync,
-                            ePaper rendering, power management
+                            ePaper rendering, power management, bottom message
   src/clock_logic.{h,cpp}   Pure, hardware-free time/sleep/battery logic
   src/clock_display.h       Templated ePaper screen renderers (header-only)
   src/FontChango88.h        Custom 88pt Chango font for the time digits

@@ -134,6 +134,36 @@ TEST(State, NoTimeStateInLoopIsStable) {
     EXPECT_EQ(ClockFixture::state(), STATE_NO_TIME);
 }
 
+// A BLE message write stores the message (truncated to MESSAGE_MAX_CHARS) and
+// triggers a display redraw. An all-NUL payload clears it.
+TEST(State, BleMessageWriteStoresAndClears) {
+    ClockFixture::reset();
+    g_state = STATE_RUNNING;
+
+    ClockFixture::simulateBleMessageWrite("Merry Christmas");
+    ClockFixture::runLoop();     // the redraw flag is consumed within the same loop
+    EXPECT_STREQ(ClockFixture::message(), "Merry Christmas");
+
+    // An all-NUL write clears the message.
+    ClockFixture::simulateBleMessageWrite("");
+    ClockFixture::runLoop();
+    EXPECT_STREQ(ClockFixture::message(), "");
+}
+
+// A message longer than MESSAGE_MAX_CHARS is truncated on the host side anyway,
+// but the firmware clamps defensively too: at most 30 chars are stored.
+TEST(State, BleMessageWriteClampsLong) {
+    ClockFixture::reset();
+    g_state = STATE_RUNNING;
+    char long_msg[60];
+    memset(long_msg, 'A', sizeof(long_msg) - 1);
+    long_msg[sizeof(long_msg) - 1] = '\0';
+
+    ClockFixture::simulateBleMessageWrite(long_msg);
+    ClockFixture::runLoop();
+    EXPECT_EQ(strlen(ClockFixture::message()), 30u);   // MESSAGE_MAX_CHARS
+}
+
 // BUG REGRESSION TEST: a failed re-sync must NOT immediately re-enter RESYNCING.
 //
 // Scenario: the clock had a valid time (g_epoch != 0) and last synced at T.

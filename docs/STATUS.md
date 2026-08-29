@@ -47,6 +47,16 @@ immediate re-sync. Fixed via TDD (regression test written first, seen red, then 
 Also resolved the Windows host-test environment: the MinGW runtime DLLs are now bundled
 next to the test executables by CMake, so `ctest` runs from a clean shell (all 9 suites
 pass), and the tooling/rendering notes are captured in LESSONS_LEARNT §28–§30.
+**2026-08-29: bottom-message feature.** Home Assistant can push a short message (e.g. a
+holiday greeting, a weekly reminder, or a default) that the clock shows on the bottom
+row. HA config uses natural `day:` rules (default / `Fri` weekly / `25 Dec` annual /
+`14 Mar 2026` one-off) with a settled precedence (date > weekday > default; last-in-list
+wins within a group), and invalid lines are logged by HA. The firmware adds an **additive**
+BLE characteristic (`c0dec10c-2a2c-4a20-8c10-000000000000`) for a 30-byte NUL-padded
+message, and `drawRunningFace` was reworked: the sync + power status is now a single
+right-aligned top group (sync icon flush-top), freeing the bottom row for the message
+(left-aligned, clamped so it never reaches AM/PM). See
+`docs/research/message-feature-design.md` (design record) and LESSONS_LEARNT §31.
 
 ## Honest state of play
 

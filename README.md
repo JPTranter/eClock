@@ -20,9 +20,9 @@ These are real renders of the ePaper output, produced by the host test harness
 (`firmware/test/`) — the syncing page while the clock waits for its first Home
 Assistant time sync, and the running clock face once it has time.
 
-| Syncing | Time |
-| --- | --- |
-| <img src="docs/screenshots/syncing.png" alt="Syncing page" width="296"> | <img src="docs/screenshots/running.png" alt="Clock face" width="296"> |
+| Syncing | Time | Time + message |
+| --- | --- | --- |
+| <img src="docs/screenshots/syncing.png" alt="Syncing page" width="296"> | <img src="docs/screenshots/running.png" alt="Clock face" width="296"> | <img src="docs/screenshots/message.png" alt="Clock face with a message" width="296"> |
 
 ## Design goals
 
@@ -125,6 +125,12 @@ component that discovers the clock by BLE advertisement and writes the current e
 plus UTC offset to the standard Current Time characteristic (`0x2A2B`). It exposes an
 `epaper_clock.sync_time` service for manual resyncs. The device and host sides were
 validated end-to-end in Phase 4 — see `docs/STATUS.md`.
+
+It can also push a short **bottom message** to the clock (e.g. a holiday greeting or
+a weekly reminder) via a separate additive characteristic, configured with a
+`messages:` list in `configuration.yaml`. See
+`integrations/homeassistant/README.md` and
+`docs/research/message-feature-design.md` for the config and the selection rules.
 
 ## Building, flashing and testing from the command line
 
