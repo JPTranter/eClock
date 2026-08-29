@@ -1581,3 +1581,52 @@ and 296×128. Use it instead of manually rebuilding a single target + copying.
   set can't drift.
 - Two harness screens can share a name but differ: `output/sleeping.png` (defensive Zzz
   only) vs `output/sleep_icon.png` (overnight Zzz + "Sleeping"); the docs want the latter.
+
+---
+
+## 33. Vertical-stretching the time font, and realistic ePaper screenshots (verified 2026-08-29)
+
+### The "go larger" trap (and the squish recap)
+When asked to make the time larger, a naive exploration generated *raw* Chango fonts
+(no spacing applied) and concluded the current font "overflows" / there's room to grow.
+That was WRONG: the shipped `FontChango88.h` has the **−8px xAdvance squish**
+(`xAdvance = width - 8`, see §20), so its real widest string `10:44` is **282px** — it
+fits the 296px panel with +14px. Raw fonts measure ~332px and look like they overflow.
+**Always measure the *in-tree* font (with its squish), not a freshly generated one.**
+
+### The width ceiling is real: 88pt
+Even squished, 88pt is the horizontal ceiling (§20): at 90pt `10:44` overflows. So you
+**cannot** go bigger to fill vertical space — scaling the font widens the glyphs.
+
+### Solution: vertical-only stretch (`--stretch-height`)
+To fill more vertical space *without* overflowing width, scale each glyph's bitmap
+vertically while keeping width and the squished xAdvance. Added an optional
+`--stretch-height <scale>` to `gfxfont_gen.py` and threaded it through `font_tool.py
+generate`. The shipped font is now 88pt with `--stretch-height 1.1` + the squish:
+
+```
+python tools/gfxfont_gen.py Chango.ttf 88 48 58 out.h --stretch-height 1.1
+# squish xAdvance = width - 8, then:
+python tools/font_tool.py fix    src/FontChango88.h   # normalise yOff + centre colon
+python tools/font_tool.py center src/FontChango88.h   # real width/centring math
+```
+Result: digit ink 64px → **70px** (73px for the tall '0'), V-fill ~67% → ~76%, widest
+string still 282px (`10:44`, +14px margin). Big-time ink now y=26–95 with an 8px gap
+to the top row and 15px to the bottom. The digits read as slightly taller Chango.
+
+> **Gotcha:** after post-editing the glyph table, run the real `fix` tool — it re-centred
+> the colon yOffset (-97 → -95) that a hand-set uniform value got wrong. Don't hand-code
+> metrics the tooling already computes. Also remove any duplicate trailing commas when
+> rewriting a glyph table (`},,` breaks the build).
+
+### Realistic ePaper screenshots (light-gray background)
+The docs screenshots are grayscale PNGs from the host harness. `png_dump.cpp` mapped
+bit=1 (white) to `255` (pure white). Real ePaper panels are off-white/warm; pure white
+reads as "screen off/document." Changed the background to light gray (`0xD8` ~216),
+keeping ink black (0). Now `docs/screenshots/*.png` look like the actual panel. The
+`regenerate_docs_screenshots.py` state-matrix composite was updated to use the same
+`0xD8` background so the collage is consistent.
+
+**Lesson:** regenerate ALL docs screenshots from the (rebuilt) harness after any render
+change — the `regenerate_docs_screenshots.py` script does this in one shot and now
+produces the gray-background, stretched-font set.

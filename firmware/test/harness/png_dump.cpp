@@ -19,10 +19,16 @@ bool dump_png(const char* path, const uint8_t* packed, int w, int h) {
     const int stride = (w + 7) / 8;
     std::vector<uint8_t> gray(static_cast<size_t>(w) * h);
 
+    // ePaper panels are not pure white; render the "white"/background as a light
+    // gray so screenshots look like the real display. Value chosen to read as a
+    // light ePaper background (grayscale). Black (bit clear) stays 0.
+    const uint8_t kBg = 0xD8;   // ~216 -> light gray
+    const uint8_t kInk = 0x00;  // black
+
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             uint8_t bit = packed[y * stride + (x / 8)] & (0x80 >> (x & 7));
-            gray[static_cast<size_t>(y) * w + x] = bit ? 255 : 0;
+            gray[static_cast<size_t>(y) * w + x] = bit ? kBg : kInk;
         }
     }
 

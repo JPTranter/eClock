@@ -192,7 +192,7 @@ def cmd_scan(ttf_path):
 
 
 def cmd_generate(ttf_path, pt_size, output_path, copyright_str=None,
-                 is12h=True):
+                 is12h=True, stretch=None):
     """Generate the font header and print centering math."""
 
     if not os.path.exists(ttf_path):
@@ -218,6 +218,8 @@ def cmd_generate(ttf_path, pt_size, output_path, copyright_str=None,
         f'48 58 '
         f'"{output_abs}"'
     )
+    if stretch:
+        cmd += f' --stretch-height {stretch}'
     print(f"  Running: {cmd}")
     ret = os.system(cmd)
     if ret != 0:
@@ -623,6 +625,7 @@ def main():
         out = sys.argv[4]
         copyright_str = None
         is12h = True
+        stretch = None
         # Parse optional flags
         i = 5
         while i < len(sys.argv):
@@ -632,9 +635,12 @@ def main():
             elif sys.argv[i] == "--24h":
                 is12h = False
                 i += 1
+            elif sys.argv[i] == "--stretch-height" and i + 1 < len(sys.argv):
+                stretch = sys.argv[i + 1]
+                i += 2
             else:
                 i += 1
-        cmd_generate(ttf, pt, out, copyright_str, is12h)
+        cmd_generate(ttf, pt, out, copyright_str, is12h, stretch)
 
     elif cmd == "center":
         if len(sys.argv) < 3:

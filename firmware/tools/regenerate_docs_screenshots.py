@@ -141,7 +141,10 @@ def assemble_matrix() -> None:
 
     w, h = Image.open(imgs[0][0]).size
     lh, pad = 16, 6
-    sheet = Image.new("RGB", (w, (h + lh + pad) * len(imgs) + pad), "white")
+    # Match the ePaper light-gray background used by the harness so the composite
+    # looks consistent with the individual screenshots.
+    BG = (0xD8, 0xD8, 0xD8)
+    sheet = Image.new("RGB", (w, (h + lh + pad) * len(imgs) + pad), BG)
     d = ImageDraw.Draw(sheet)
     y = pad
     for src, label in imgs:

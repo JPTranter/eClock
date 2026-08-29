@@ -2,16 +2,25 @@
 Generate an Adafruit GFX-style 1-bit font header from a TrueType font.
 Output: C header containing GFXfont struct and bitmap data.
 
-Usage: python gfxfont_gen.py <ttf_path> <point_size> <first_char> <last_char> <output.h>
+Usage: python gfxfont_gen.py <ttf_path> <point_size> <first_char> <last_char> <output.h> [--stretch-height scale]
 
 The output format matches what fontconvert produces for the Adafruit GFX library.
+
+`--stretch-height` scales each glyph's rendered bitmap VERTICALLY by the given factor
+(e.g. 1.1) while keeping the glyph width and xAdvance unchanged. Combined with the
+xAdvance "squish" (see LESSONS #20 and FONT_GENERATION.md), this lets the time digits
+fill more vertical space on the 296x128 panel without overflowing its width.
 """
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
 
-def render_glyph(font, char, size):
+def render_glyph(font, char, size, stretch=1.0):
     """Render a single character and extract its 1-bit bitmap + metrics.
+
+    ``stretch`` scales the glyph bitmap VERTICALLY (factor >= 1.0) keeping width and
+    xAdvance unchanged, so the time digits can fill more vertical space without
+    overflowing the panel's width.
 
     Returns (bitmap_bytes, width, height, x_advance, x_offset, y_offset)
     where bitmap_bytes is a bytearray of 1-bit MSB-packed rows.
@@ -51,6 +60,15 @@ def render_glyph(font, char, size):
     draw = ImageDraw.Draw(img)
     draw.text((-x0, -y0), char, font=font, fill=1)
 
+    # Optional vertical stretch: scale the glyph bitmap taller while keeping the
+    # width. This grows y_offset magnitude proportionally so the glyph stays
+    # baseline-anchored (baseline at -y1 originally; scaled by the same factor).
+    if stretch != 1.0 and stretch > 0:
+        new_h = max(1, round(height * stretch))
+        img = img.resize((width, new_h), Image.LANCZOS)
+        y1_scaled = round(y1 * stretch)
+        return (img, width, new_h, x_advance, 0, -y1_scaled)
+
     return (img, width, height, x_advance, 0, -y1)
 
 
@@ -79,7 +97,7 @@ def glyph_to_c_array(img, width, height):
 
 def main():
     if len(sys.argv) < 6:
-        print("Usage: python gfxfont_gen.py <ttf_path> <pt_size> <first_char> <last_char> <output.h>")
+        print("Usage: python gfxfont_gen.py <ttf_path> <pt_size> <first_char> <last_char> <output.h> [--stretch-height scale]")
         sys.exit(1)
 
     ttf_path = sys.argv[1]
@@ -88,8 +106,19 @@ def main():
     last = int(sys.argv[4])
     out_path = sys.argv[5]
 
+    # Optional: --stretch-height <scale> (e.g. 1.1) scales glyphs vertically.
+    stretch = 1.0
+    if "--stretch-height" in sys.argv:
+        idx = sys.argv.index("--stretch-height")
+        stretch = float(sys.argv[idx + 1])
+        if stretch <= 0:
+            print("ERROR: --stretch-height must be > 0")
+            sys.exit(1)
+
     print(f"Loading font: {ttf_path}")
     font = ImageFont.truetype(ttf_path, pt_size)
+    if stretch != 1.0:
+        print(f"  Vertical stretch: x{stretch} (glyph heights scaled, width/advance kept)")
 
     # Get font metrics
     metrics = font.getmetrics()
@@ -103,7 +132,7 @@ def main():
 
     for code in range(first, last + 1):
         char = chr(code)
-        result = render_glyph(font, char, pt_size)
+        result = render_glyph(font, char, pt_size, stretch)
         if result is None:
             # Empty/fallback glyph
             glyphs.append({
