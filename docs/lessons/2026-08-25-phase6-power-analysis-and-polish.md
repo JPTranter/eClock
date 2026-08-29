@@ -150,3 +150,8 @@ See `docs/research/power-budget-analysis.md` for the full methodology.
 - `sprite_Chango88.png` — **new** 88pt font sprite sheet
 - `sprite_Chango-Regular_82pt.png` — **new** 82pt font sprite sheet (from
   previous session's font fix)
+
+> **Note (2026-08-29):** the `sprite_*.png` files were one-off *visual-review* outputs
+> of `icon_tool.py`/`font_tool.py` — never consumed by the build, docs, or any tool.
+> They were removed from the repo as unreferenced artifacts. The sprite sheet is still
+> regenerable on demand with `firmware/tools/icon_tool.py sprite ...`.
