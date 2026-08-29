@@ -29,16 +29,15 @@ documents.
 ![eClock state machine](state-machine.png)
 
 Rendered from [state-machine.mmd](state-machine.mmd). To regenerate — the renderer is
-**not** committed; install it on demand (Node 18+ required):
+installed globally, not per-repo (Node 18+, Chromium cached on first use):
 
 ```bash
-# one-time setup (deps are gitignored; nothing here is committed)
-cd docs/design
-npm install @mermaid-js/mermaid-cli
-npx puppeteer browsers install chrome   # downloads Chromium for the headless render
+# one-time setup
+npm install -g @mermaid-js/mermaid-cli     # provides the `mmdc` command
+npx puppeteer browsers install chrome       # headless Chromium (cached; re-run if missing)
 
 # regenerate the PNG from the source
-npx mmdc -i state-machine.mmd -o state-machine.png -b white
+mmdc -i docs/design/state-machine.mmd -o docs/design/state-machine.png -b white
 ```
 
 If you edit the diagram, change the `.mmd`, re-render, and commit **both** the `.mmd`
