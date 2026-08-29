@@ -43,6 +43,12 @@
   ```
   Verify with `md5sum` that each `docs/screenshots/*.png` matches
   `firmware/test/output/*.png`; commit the refresh in the same commit as the doc change.
+  **Watch the two sleep images:** `output/sleeping.png` is the *defensive* STATE_SLEEPING
+  placeholder (Zzz only, from `drawSleepingScreen()`), while `output/sleep_icon.png` is
+  the *real overnight* screen left on the panel at bedtime (Zzz + "Sleeping", from
+  `drawSleepIcon()`). `docs/screenshots/sleeping.png` must be the **overnight** screen
+  (`sleep_icon.png`), since `docs/USER_GUIDE.md` describes it as "Zzz" with *Sleeping*
+  beneath it.
 - **Keep pin numbers in sync.** `docs/hardware/PINOUT.md` and `docs/lessons/*` both
   document the pin mapping. When `firmware/include/board_pins.h` changes, update every
   table/note that mentions `EPD_CS`/`EPD_DC`/`EPD_RST`/`EPD_BUSY`/`EPD_POWER` in both.

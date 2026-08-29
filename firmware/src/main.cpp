@@ -295,7 +295,10 @@ static void drawLowBatteryScreen() {
 }
 
 static void enterSleepMode() {
-    // Draw the sleep icon before cutting panel power
+    // Draw the real overnight screen (Zzz + "Sleeping") before cutting panel power.
+    // NOTE: this is drawSleepIcon(), NOT drawSleepingScreen() — the latter is the
+    // Zzz-only *defensive* placeholder used by drawClockFace()'s STATE_SLEEPING case,
+    // and is never what actually gets left on the panel overnight.
     drawSleepIcon();
     g_needs_display_update = false;
 

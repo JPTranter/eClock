@@ -1280,3 +1280,35 @@ step the same `id` in a job (duplicate step ids are invalid).
 The bootloader's tiny simulated FAT16 mass storage drive does not fully implement Long File Names (LFN). Copying a UF2 file with a long name (like eClock-v0.1.0.uf2) crashes the bootloader mid-transfer because Windows attempts to write VFAT LFN directory entries. This yields a 'device which does not exist' error.
 
 **Fix:** Rename the UF2 file to an 8.3-compliant name (e.g., ECLOCK.UF2) before copying, or use the GitHub Release workflow which now automatically produces an 8.3 compliant filename.
+
+---
+
+## 27. Keep docs, screenshots and firmware README in sync (verified 2026-08-29)
+
+Docs drift silently. This session surfaced three separate sync gaps; each cost a
+regeneration/redo pass. Capture all three as a standing checklist before committing
+any doc change.
+
+### 27.1 Screenshots go stale without any code change
+`docs/screenshots/*.png` are real renders from the host harness. A change to a renderer,
+font, icon, **version string**, or layout makes them stale — even though the build still
+passes. Regenerate with the harness (see `docs/lessons/TEMPLATE.md` "Docs maintenance
+checklist") **in the same commit** as the doc change, and verify with `md5sum`.
+
+### 27.2 There are *two* different "sleep" screens — don't swap them
+The eClock has two sleep renders and they are NOT interchangeable:
+- `drawSleepingScreen()` → **Zzz only**. Used by the *defensive* `STATE_SLEEPING` case in
+  `drawClockFace()`. Harness output `output/sleeping.png`.
+- `drawSleepIcon()` → **Zzz + "Sleeping"**. The *real overnight* screen left on the panel
+  before the rail is cut (`enterSleepMode()`). Harness output `output/sleep_icon.png`.
+
+`docs/screenshots/sleeping.png` must be the **overnight** screen (`sleep_icon.png`),
+because `docs/USER_GUIDE.md` describes it as "Zzz" with *Sleeping* beneath it. A prior
+commit wrongly used the Zzz-only render; caught by reading the USER_GUIDE text back
+against the image. **Lesson: always reconcile the image against what the prose promises.**
+
+### 27.3 `firmware/README.md` was a Phase-1 stub
+It read "Nothing here yet" and "the core has not been chosen yet" — both false for a
+long time (the firmware is complete and mbed-only). The top-level `README.md` was kept
+current but the per-directory one rotted. **Lesson: when you touch a README, sweep the
+whole repo for other stale READMEs/stubs, not just the file in front of you.**
