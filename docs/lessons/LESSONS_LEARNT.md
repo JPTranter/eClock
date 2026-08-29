@@ -1312,3 +1312,82 @@ It read "Nothing here yet" and "the core has not been chosen yet" — both false
 long time (the firmware is complete and mbed-only). The top-level `README.md` was kept
 current but the per-directory one rotted. **Lesson: when you touch a README, sweep the
 whole repo for other stale READMEs/stubs, not just the file in front of you.**
+
+---
+
+## 28. Windows: MinGW runtime DLLs break ctest from a clean shell (verified 2026-08-29)
+
+The host test executables that link the **dynamic** GCC runtime fail on Windows with
+`STATUS_ENTRYPOINT_NOT_FOUND` (`exit code 0xc0000139`) when `ctest` launches them
+without the MinGW `bin` dir on `PATH`:
+
+```
+3/9 tests failed: test_clock_display, test_smoke, test_display  (0xc0000139)
+```
+
+**Root cause:** those suites link `libstdc++-6.dll`, `libgcc_s_seh-1.dll` and
+`libwinpthread-1.dll` (imported by MinGW, not the UCRT/OS). The other six suites don't
+link them, so they always pass — which hides the problem. CI never hits it because it
+runs on Linux glibc, which has no DLL-resolution layer.
+
+**The fix (implemented in `firmware/test/CMakeLists.txt`):** resolve the MinGW bin dir
+from `CMAKE_CXX_COMPILER` (robust, not hardcoded) and copy the three DLLs next to each
+test executable via a `POST_BUILD` `copy_if_different` step. Windows then loads them
+from the exe's own directory, so `ctest` works from a clean shell with no PATH setup.
+
+**Verify:** run ctest with MinGW **removed** from PATH — all 9 suites must pass. (The
+PASS times jump from ~0.03s to ~0.2s: the DLLs are genuinely loaded from disk next to
+the exe, not resolved via a PATH hit.)
+
+**Licensing (checked):** the DLLs are **GPLv3 + GCC Runtime Library Exception**, which
+explicitly permits distributing these unmodified runtime libraries with a program. They
+are only copied into the local `firmware/test/build/` dir (gitignored) — never
+committed or redistributed.
+
+**Two trigger patterns worth knowing:** (a) a suite that links the dynamic runtime will
+fail only on the *host* machine, not CI; (b) `0xc0000139` is "entry point not found" —
+a missing/version-mismatched DLL, **not** a logic bug. When you see it, check the
+executable's imported DLLs (`objdump -p`) before touching code.
+
+---
+
+## 29. Rendering a Mermaid diagram for the docs (verified 2026-08-29)
+
+`docs/design/state-machine.png` is rendered from `state-machine.mmd` with
+**@mermaid-js/mermaid-cli** (`mmdc`). The tooling is machine-local, not committed.
+
+**Install (once, globally so it's usable from anywhere):**
+```bash
+npm install -g @mermaid-js/mermaid-cli   # provides the `mmdc` command
+npx puppeteer browsers install chrome     # headless Chromium (cached by puppeteer)
+```
+
+**Render:**
+```bash
+mmdc -i docs/design/state-machine.mmd -o docs/design/state-machine.png -b white
+```
+Note `-b white` (else the PNG background is transparent). Commit **both** the `.mmd`
+and the `.png` together — the `.mmd` is the editable source, the `.png` is the artifact
+the doc embeds.
+
+**Gotchas (each cost a retry):**
+- **Mermaid parser errors are off-by-one.** A parse error pointing at line N is often a
+  *previous* line leaving the parser mid-construct. Isolate by shortening, or simplify.
+  The `flowchart` parser is pickier than `stateDiagram-v2`.
+- **Quotes for special chars.** Parentheses/`!=`/`[]` inside node labels need quoting,
+  else Mermaid misreads them as node shapes. Prefer `node["label"]` and `"edge label"`.
+- **The `%%{init: ...}%%` block must come before `flowchart`/`stateDiagram`**, and be on
+  its own lines adjacent to the `%%` comment markers.
+- **`class A,B,C state;` (comma list) breaks the `flowchart` parser** in some versions.
+  Per-node `style X fill:...` is more reliable.
+- **Edge routing:** `flowchart` defaults to curves. `%%{init: {"flowchart": {"curve":
+  "step"}}}%%` gives orthogonal (right-angle) elbows, but with many long edges that
+  produced a messy, crossing layout — **the default curved `flowchart` looked best** for
+  this diagram. `stateDiagram-v2` gives true UML start/stop (filled dot + bullseye) but
+  keeps curved edges. Choose per-diagram; this repo settled on the curved `flowchart`.
+- **Path gotcha (git-bash/Windows):** `mmdc`/node can't see bash `/tmp`; pass **native**
+  Windows paths like `C:/Users/.../state-machine.mmd`, not `/tmp/...`.
+
+**Git:** node_modules and the puppeteer cache are ignored in `.gitignore`
+(`node_modules/`, `.cache/puppeteer/`), so installing the tool locally never dirties the
+repo. `docs/design/package*.json` is ignored too.
