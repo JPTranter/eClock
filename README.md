@@ -42,6 +42,9 @@ Assistant time sync, and the running clock face once it has time.
 - [Status](docs/STATUS.md) — where the project actually stands today.
 - [Hardware pinout](docs/hardware/PINOUT.md) — pin mappings, power control, and board
   traps (read this before wiring or writing display code).
+- [State machine design](docs/design/state-machine.md) — the firmware's five-state
+  design, every transition and trigger, and how it interacts with BLE/buttons/battery/
+  power. **Start here for the system design.**
 - [Lessons learned](docs/lessons/LESSONS_LEARNT.md) — accumulated hard-won findings from
   each development session.
 - [Power budget](docs/research/power-budget-analysis.md) — the six-term energy model and
@@ -93,6 +96,7 @@ docs/
   USER_GUIDE.md              How to use the clock: screens, icons, buttons, troubleshooting
   hardware/PINOUT.md         Pin mappings, power control, board traps
   hardware/datasheets/       Vendor docs — NOT committed, see README there
+  design/state-machine.md    Firmware state machine (system design reference)
   lessons/LESSONS_LEARNT.md  Accumulated hard-won findings
   lessons/TEMPLATE.md        Per-session log template
   research/                  Open research questions and their answers

@@ -81,3 +81,11 @@ firmware/test/output/
 
 # ---- Agent workspace (not project content) ----
 .hermes/
+
+# ---- Mermaid diagram rendering (docs/design) ----
+# The state-machine diagram is re-rendered on demand with @mermaid-js/mermaid-cli.
+# Its node_modules and the puppeteer Chromium cache are machine-local and never
+# committed; only the checked-in .mmd and .png are project content.
+node_modules/
+.cache/puppeteer/
+docs/design/package*.json
