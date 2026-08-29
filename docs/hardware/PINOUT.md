@@ -11,7 +11,7 @@ produces a panel that ignores everything with `Busy Timeout!`.
 | Panel connection | Standard header pins | Hidden pogo pins under the XIAO |
 | CS | **D7** (P1.12) | 7 (P1.12) |
 | DC | **D16** (P0.31) — shared with VBAT (see §2 in lessons) | 16 (P0.27) on Adafruit core, 15 on mbed |
-| RST | **D11** (P0.15) | 11 (P0.26) |
+| RST | **D11** (P0.15) — see §"Verifying the pin mapping" (firmware uses runtime-remapped index 29 → P0.15) | 11 (P0.26) |
 | BUSY | **D3** (P0.29) | 3 (P0.29) |
 | SCK / MOSI | **D8 / D10** (default hardware SPI) | via pogo pads |
 | Panel power | **MOSFET gate on D6** (P1.11), must be driven HIGH | MOSFET gate on D6, must be driven HIGH |
@@ -26,16 +26,25 @@ hardware 2026-08-22; see `docs/lessons/LESSONS_LEARNT.md` §1.
 ### Verifying the pin mapping
 
 The definitive test is to read the panel pins straight from `firmware/include/board_pins.h`
-— that is the source of truth the firmware compiles against:
+— that is the source of truth the firmware compiles against (mbed core):
 
 ```cpp
-EPD_CS = D7, EPD_DC = D16 (P0.31), EPD_RST = D11 (P0.15),
-EPD_BUSY = D3 (P0.29), EPD_POWER = D6 (P1.11, MOSFET gate)
+EPD_CS = 7 (P1.12),  EPD_DC = 32 (P0.31),  EPD_RST = 29 (P0.15, runtime-remapped),
+EPD_BUSY = 3 (P0.29), EPD_POWER = 6 (P1.11, MOSFET gate)
 ```
 
-If a `Busy Timeout!` appears, first confirm the **Plus variant** is selected (a stock
-variant does not define `D16`/`D11`, and the display never responds). A diagnostic
-pin-scan harness is available as `pio run -e pindiag`.
+**Note on the mbed variant's pin table:** the mbed core's `SEEED_XIAO_NRF52840_SENSE`
+variant `g_APinDescription[]` already contains `P0_31` at **index 32** (so `EPD_DC = 32`
+works natively) but does **not** contain `P0_15` at all — the physical RST pad exists on
+the Plus board but is absent from this table. The firmware therefore:
+
+- uses **index 29** for `EPD_RST`, re-bound to the physical `P0_15` at the top of
+  `setup()` via `g_APinDescription[29].name = P0_15;` (default index 29 is `P0_9`, an
+  unused NFC/I2C-pull placeholder — safe to repurpose).
+- **does not** use `D16`/`D11` aliases for DC/RST on the mbed core; those are
+  *Adafruit-core* conventions (Plus variant `D16`→P0.31, `D11`→P0.15). On mbed the raw
+  indices above are correct. Do **not** change `EPD_RST` to a "Dxx" alias — it must
+  stay the remapped index 29. See `docs/lessons/LESSONS_LEARNT.md` §5.
 
 ## Panel power gate (current board)
 
@@ -109,14 +118,18 @@ current `main.cpp`.
 
 Work through this in order:
 
-1. **Is the Plus variant selected?** The current board needs the vendored
-   `Seeed_XIAO_nRF52840_Plus` variant. With a stock variant, `D16`/`D11` are undefined
-   and the panel never responds (`Busy Timeout!`). Run `pio run -e pindiag` to scan the
-   pins and confirm `CS=D7`, `DC=D16`, `RST=D11`, `BUSY=D3`.
+1. **Are the firmware's pin config and the runtime remap both present?**
+   Check `firmware/include/board_pins.h`: `EPD_CS = 7`, `EPD_DC = 32 (P0.31)`,
+   `EPD_RST = 29` (the *runtime-remapped* index), `EPD_BUSY = 3`, `EPD_POWER = 6`.
+   And confirm `setup()` runs `g_APinDescription[29].name = P0_15;` before
+   `display.init()` — without that remap the RST line is a no-op on the mbed core.
+   Run `pio run -e pindiag` to scan the pins.
 2. **Is D6 driven HIGH?** The panel rail is gated by the D6 MOSFET — if it floats, the
    panel is unpowered and ignores everything.
 3. Is the display's FPC fully seated in its connector?
-4. Are DC and RST using the correct Plus-variant aliases (`D16` → P0.31, `D11` → P0.15)?
+4. Is RST actually driving P0.15? (Physical pin `P0.15`, via the remapped index 29 —
+   **not** a `D11` alias, which the mbed base variant does not define.) DC uses
+   index 32 → `P0.31` (native in the mbed table).
 5. On a legacy (non-Plus) board + mbed: has the TWIM-disable hack run before display init?
 6. **Read the BUSY pin directly.** On the SSD1680, `1` = busy and `0` = idle. If BUSY
    is stuck at `1` and never falls, no amount of SPI will help — the controller is not

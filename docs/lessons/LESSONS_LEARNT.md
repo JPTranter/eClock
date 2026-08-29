@@ -34,6 +34,12 @@ selected.
 | BUSY | D3 | P0.29 | |
 | Panel power gate | D6 | P1.11 | MOSFET, must be HIGH |
 
+> **These `Dxx` are the Adafruit-core names** (Plus variant). On the **mbed core** the
+> firmware uses raw `g_APinDescription` indices: `EPD_CS=7`, `EPD_DC=32 (P0.31)`,
+> `EPD_RST=29 (P0.15, runtime-remapped)`, `EPD_BUSY=3`, `EPD_POWER=6` — see §5
+> "Getting the Display Working on mbed". The *physical* ports (P1.12/P0.31/P0.15)
+> are identical either way.
+
 ### The XIAO has no 32 kHz crystal
 
 `USE_LFRC` is required. Without it the BLE stack's low-frequency clock never starts
@@ -169,8 +175,10 @@ bootloader it exits cleanly. Double-tap RESET is the manual fallback.
 ### LED polarity
 
 This variant defines `LED_STATE_ON 1` (active HIGH). Derive from the variant macro
-rather than hardcoding. `LED_RED` is D11 = P0.15 — same pin as ePaper RST; do not
-blink it in display code. Use `LED_BLUE` (D12 = P0.06).
+rather than hardcoding. **On the mbed core**, `LED_RED` is D11 = P0.26 (NOT P0.15 —
+that's the Adafruit-core's LED naming; on mbed P0.15 is not exposed as an LED and is
+used as ePaper RST). Do not blink the RST pin in display code. Use `LED_BLUE`
+(D13 = P0.06 on mbed; the Adafruit D12 alias differs).
 
 ---
 
@@ -185,13 +193,52 @@ The XIAO ships with the factory Seeed UF2 bootloader (e.g., `UF2 0.9.2-29-g6a9a6
 To get BLE working without risking a physical bootloader re-flash, you must use the Seeed mbed core (`board = xiaoble` with `framework-arduino-mbed-seeed`) and the standard `ArduinoBLE` library.
 - Use the `[env:mbed]` environment in `platformio.ini`.
 
-### Getting the Display Working on mbed
-Because the mbed core doesn't officially have a variant definition for the XIAO nRF52840 **Plus** (only the base/Sense model), the extra pins (`D11..D19`) are missing from its Arduino pin mapping array (`g_APinDescription`).
-**Do not manually patch the `variant.cpp` file in `~/.platformio`.** If the environment is ever refreshed (or on a clean CI machine), the patch is lost. This results in out-of-bounds array accesses when `GxEPD2` tries to toggle the reset pin, causing instant freezes on boot and broken USB enumeration.
-**The Fix:** We dynamically remap an unused pin index to `P0.15` in `setup()`. We use `D29` (index 29) since we don't use NFC.
-1. In `board_pins.h`, use index 29 for `EPD_RST`.
-2. In `main.cpp`, add `extern PinDescription g_APinDescription;` and `g_APinDescription[29].name = P0_15;` before initializing the display.
-This allows `GxEPD2` to properly toggle the physical reset pin safely and portably.
+### Getting the Display Working on mbed (verified 2026-08-29)
+
+**Why this is needed — the two-layer pin model.** The nRF52 Arduino core translates an
+*Arduino pin number* (the index you pass to `digitalWrite`) into a *physical pin*
+through a table, `g_APinDescription[]`:
+
+```
+Arduino index (uint8_t)  →  g_APinDescription[n].name  →  PinName (P0_15, P0_31, ...)
+```
+
+The mbed core's `SEEED_XIAO_NRF52840_SENSE` variant `pinDefinitions.h` builds this table
+from the **base SENSE board**, NOT the Plus. That table **lacks `P0_15`** — the physical
+pin exists on the Plus board (the display's RST) but is absent from the variant's map.
+`P0_31` (DC) **is** present, at index 32. So a `digitalWrite(EPD_RST, ...)` with an
+un-remapped index would either go out of bounds (freeze/crash) or drive an *unrelated*
+pad; index 29 by default is `P0_9` (an unused NFC/I2C-pull placeholder).
+
+**Do not manually patch `variant.cpp` in `~/.platformio`.** It's outside the repo; an
+environment refresh (or a clean CI machine) loses it, resurrecting the crash.
+
+**The Fix (in-repo, portable):** re-bind one *unused* slot of that table at runtime,
+before the display initializes. We use Arduino index `29` (default `P0_9` — unused NFC
+area) and set it to the physical `P0_15`:
+
+```cpp
+// main.cpp, top of setup(), before display.init():
+extern PinDescription g_APinDescription[];      // defined in the mbed core
+g_APinDescription[29].name = P0_15;             // slot 29 now means "physical P0.15"
+```
+
+And in `firmware/include/board_pins.h`, `EPD_RST` must be the **index of the slot you
+remapped** (29), not a pre-existing index:
+
+```cpp
+#define EPD_RST   29    // P0.15 — dynamically remapped in setup(); do NOT use 33
+```
+
+After this, `digitalWrite(29, …)` hits `g_APinDescription[29].name == P0_15` and
+correctly drives the physical RST pad. **`D29` here is an Arduino *index*, `P0_15` is
+the *physical pin*; the snippet binds them.** `EPD_DC` stays `32` (P0.31 is native in
+the mbed table). The other display pins (`CS=7`, `BUSY=3`, `POWER=6`) are unchanged.
+
+> **Why the old `D33` (index 33) was wrong:** earlier firmware used index 33 for
+> `EPD_RST`. That index exists in the mbed table but points at **QSPI_SCK (P0.21)** —
+> toggling it pulsed the wrong silicon, so the panel behaved inconsistently. The fix
+> both makes the correct pad reachable **and** uses a repurposed unused slot.
 
 ### ArduinoBLE requires strict non-blocking loops
 The `ArduinoBLE` stack on mbed requires frequent calls to `BLE.poll()` to handle background GATT events. **Never use `delay()`** or any blocking functions in the main loop or characteristic callbacks.
@@ -258,6 +305,13 @@ The Adafruit stock variant defines only `D0`–`D10`. `D16` and `D11` are not ma
 and fail at compile. The pin *indices* are correct (`g_ADigitalPinMap` maps 16→P0.27,
 11→P0.26 on the stock variant; 35→P0.31, 30→P0.15 on the Plus variant). This project
 uses Dxx symbols with the Plus variant selected, which defines them as `static const`.
+
+> **Note (2026-08-29):** the shipped firmware does **not** rely on the Plus variant's
+> `D11`/`D16` aliases for the display RST pin. The mbed core uses the *base* SENSE
+> variant's pin table, which **lacks P0.15** (RST) but **does have P0.31 at index 32**
+> (so `EPD_DC=32` works natively). `EPD_RST` is the **runtime-remapped index 29**
+> (bound to P0.15 in `setup()`); `EPD_BUSY`/`EPD_POWER`/etc. use the indices that exist
+> in that table. See §5 "Getting the Display Working on mbed".
 
 ---
 

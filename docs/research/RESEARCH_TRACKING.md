@@ -41,8 +41,10 @@ earlier hands-on work that has not yet been reproduced by code in this repositor
     bootloader and `Bluefruit52Lib` requires the Adafruit nRF52 UF2 bootloader.
     Using BLE means reflashing the bootloader (SWD or a UF2 drop).
   - **Seeed mbed core + ArduinoBLE:** no bootloader reflash needed, but the display
-    requires remapping DC/RST to the Plus-variant pins `D16`/`D11` and care around the
-    P0.31 DC/VBAT overlap (see `docs/lessons/LESSONS_LEARNT.md` §2).
+      requires a small runtime remap (see `docs/lessons/LESSONS_LEARNT.md` §5): the mbed
+      variant's pin table lacks `P0_15` (RST), so `setup()` rebinds unused index 29 to
+      `P0_15`; DC/P0.31 is already present at index 32. Care around the P0.31 DC/VBAT
+      overlap (§2).
 - **Note:** the original suspicion that the hard fault was an `LFRC` vs `LFXO`
   crystal setting was **wrong**. It is a bootloader incompatibility.
 - **Decision:** mbed + ArduinoBLE works without reflashing the bootloader, so it was
