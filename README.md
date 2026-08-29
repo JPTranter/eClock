@@ -171,6 +171,11 @@ cmake --build firmware/test/build
 ctest --test-dir firmware/test/build --output-on-failure
 ```
 
+On Windows, the build also copies the MinGW runtime DLLs (`libstdc++-6.dll`,
+`libgcc_s_seh-1.dll`, `libwinpthread-1.dll`) next to each test executable, so ctest
+runs from a clean shell without needing them on PATH. (If you already have a build dir
+from before this change, re-run the `cmake -S ...` configure step once to pick it up.)
+
 PNG renders land in `firmware/test/output/`. For a coverage report:
 
 ```bash

@@ -109,12 +109,12 @@ state machine directly. Key tests:
 - `test_clock_display.cpp` / `test_display.cpp` — what each state renders (and dumps
   the PNG screenshots used in docs).
 
-Run them (Windows — the MinGW bin dir must be on PATH for the dynamic runtime DLLs):
+Run them (Windows — the CMake build copies the MinGW runtime DLLs next to each test
+executable, so `ctest` works from a clean shell with no PATH setup):
 
 ```bash
 cd firmware/test
-PATH="<mingw64>/bin:$PATH" ctest --test-dir build --output-on-failure
+cmake -S . -B build -G Ninja   # reconfigure once to pick up the DLL-copy hook
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
-
-Where `<mingw64>` is your WinLibs toolchain bin (e.g.
-`C:/Users/<you>/AppData/Local/Microsoft/WinGet/Packages/BrechtSanders.WinLibs.POSIX.UCRT_*/mingw64/bin`).

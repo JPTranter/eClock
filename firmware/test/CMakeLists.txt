@@ -91,6 +91,18 @@ target_include_directories(eclock_mock PUBLIC ${ECLOCK_MOCKS_DIR} ${ECLOCK_HARN_
 # ---------------------------------------------------------------------------
 # Test registration helper.
 # ---------------------------------------------------------------------------
+# Resolve the MinGW runtime DLL directory from the compiler path, so the DLLs
+# can be copied next to the test executables. This makes ctest work from a clean
+# shell (no libstdc++/libgcc/libwinpthread on PATH) on Windows. The DLLs are
+# GPLv3 + GCC Runtime Library Exception and are only copied into the LOCAL build
+# dir for running the host tests — they are never committed or redistributed.
+file(TO_CMAKE_PATH "${CMAKE_CXX_COMPILER}" _compiler)
+get_filename_component(_mingw_bin_dir "${_compiler}" DIRECTORY)
+set(_rt_dlls
+    "${_mingw_bin_dir}/libstdc++-6.dll"
+    "${_mingw_bin_dir}/libgcc_s_seh-1.dll"
+    "${_mingw_bin_dir}/libwinpthread-1.dll")
+
 function(eclock_test NAME)
     add_executable(${NAME} ${ARGN})
     target_link_libraries(${NAME} PRIVATE eclock_mock gtest_main)
@@ -101,6 +113,16 @@ function(eclock_test NAME)
     add_test(NAME ${NAME}
              COMMAND ${NAME}
              WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    # Copy the MinGW runtime DLLs next to the exe so ctest can load them without
+    # relying on the (shell-local) PATH. Without this, the suites that link the
+    # dynamic runtime (libstdc++-6.dll etc.) fail on Windows with
+    # STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139) when ctest spawns them.
+    if(WIN32 AND EXISTS "${_mingw_bin_dir}")
+        add_custom_command(TARGET ${NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${_rt_dlls} $<TARGET_FILE_DIR:${NAME}>
+            COMMENT "Copying MinGW runtime DLLs for ${NAME}")
+    endif()
 endfunction()
 
 # ---------------------------------------------------------------------------
