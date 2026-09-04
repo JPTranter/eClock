@@ -3,6 +3,10 @@ name: Release
 # Builds the firmware when a release is published (or a v* tag is pushed) and
 # attaches a versioned .hex so it can be downloaded and flashed directly to the
 # device with serial DFU (the reliable path documented in docs/SETUP.md).
+#
+# The release title and body are auto-generated from the git history since the
+# previous v* tag (see .github/workflows/gen_release_notes.py), so every release
+# ships with a human-readable "what changed" summary.
 on:
   push:
     tags:
@@ -20,18 +24,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # need full history to diff against the previous tag
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install PlatformIO Core
         run: pip install platformio==6.1.19
+
       - name: Collect version
         id: ver
         run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
       - name: Inject version into the firmware
         run: printf '#pragma once\n#ifndef ECLOCK_VERSION\n#define ECLOCK_VERSION "%s"\n#endif\n' "$TAG" > firmware/include/clock_version.h
         env:
           TAG: ${{ steps.ver.outputs.tag }}
+
       - name: Build mbed firmware
         run: pio run -e mbed
         working-directory: firmware
@@ -41,46 +52,19 @@ jobs:
           mkdir -p release
           cp firmware/.pio/build/mbed/firmware.hex "release/eClock-${TAG}.hex"
           cp firmware/.pio/build/mbed/firmware.elf "release/eClock-${TAG}.elf"
-          # Generate a .uf2 (drag-and-drop onto the XIAO-BOOT mass-storage drive)
-          # from the .hex with the repo's self-contained converter. The app runs
-          # at 0x27000; nRF52840 family = 0xada52840. (The microsoft/uf2 uf2conv
-          # -c path wrote the family ID into the fileSize slot and omitted the
-          # magic end, so the .uf2 did not flash; hex_to_uf2.py writes the header
-          # correctly.)
-          # The FAT16 bootloader filesystem requires an 8.3 filename.
           python firmware/tools/hex_to_uf2.py "release/eClock-${TAG}.hex" \
             "release/ECLOCK.UF2" --base 0x27000 --family 0xada52840
         env:
           TAG: ${{ steps.ver.outputs.tag }}
 
+      # Summarise the changes since the previous v* tag and derive a title.
+      - name: Generate release notes
+        id: notes
+        run: python .github/workflows/gen_release_notes.py --tag "${GITHUB_REF_NAME}" --out release/NOTES.md
+
       - name: Attach to release (or create one)
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.notes.outputs.title }}
           files: release/*
-          generate_release_notes: true
-          body: |
-            ## eClock firmware ${{ steps.ver.outputs.tag }}
-
-            Build of the device-side firmware for the XIAO BLE nRF52840 + EN05 ePaper clock
-            (version shown at the bottom left of the syncing screen).
-
-            - **`ECLOCK.UF2`** — drag-and-drop onto the `XIAO-BOOT` mass-storage drive
-              to flash. **The bootloader auto-reboots into the app ~1 s after the copy
-              completes**. (This is an 8.3-compliant filename which works reliably with the bootloader's FAT16 filesystem).
-            - **`eClock-<tag>.hex`** — flash via serial DFU (the reliable path).
-            - **`eClock-<tag>.elf`** — unstripped binary, for debugging.
-
-            ### Flash it
-            **Serial DFU (reliable):**
-            1. Put the board into the bootloader (double-tap RESET, or run
-               `python tools/reset_to_bootloader.py`).
-            2. Upload with PlatformIO using the bootloader port:
-               ```
-               pio run -e mbed -t upload --upload-port <bootloader-port>
-               ```
-            3. See `docs/SETUP.md` for the full build / flash / monitor flow.
-
-            *UF2 drag-and-drop is also supported, but note: on some hosts (incl. this
-            dev machine) the bootloader's MSC drive crashes on write — use the `.hex`
-            + serial DFU for reliability.*
+          body_file: release/NOTES.md
