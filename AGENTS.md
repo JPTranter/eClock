@@ -41,3 +41,15 @@ CodeGraph complements rather than replaces direct inspection:
   output, and working-tree state.
 - If CodeGraph is absent or cannot index the repository, fall back to direct source,
   documentation, Git, and filesystem inspection; do not block the task on it.
+
+## Python Scripting on Windows: The CP-1252 Trap
+
+**Always** explicitly declare `encoding='utf-8'` when reading or writing source code and text files in Python scripts.
+
+Python's built-in `open()` function on Windows defaults to the system's locale encoding (typically `cp1252`), not `utf-8`. If a UTF-8 file containing multibyte characters is read or written without explicitly specifying the encoding, it causes double-encoding corruption (e.g., `×` becomes `Ã—`, `—` becomes `â€”`).
+
+**Correct Usage:**
+`with open('file.cpp', 'w', encoding='utf-8') as f:`
+
+**Incorrect Usage:**
+`with open('file.cpp', 'w') as f:`
