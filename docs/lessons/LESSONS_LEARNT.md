@@ -1747,14 +1747,14 @@ npm view @colbymchenry/codegraph repository.url
 This prevents documenting a different product whose commands happen to have a similar
 name.
 
-## 18. Architectural Refactoring and SOLID Principles (verified 2026-09-04)
+## 36. Architectural Refactoring and SOLID Principles (verified 2026-09-04)
 
 During a code review and refactoring pass, several structural improvements were made:
 - **Display logic decoupling**: The display rendering functions were refactored into smaller, more focused helper functions (`drawMainTime`, `drawTopStatusRow`, `drawBottomMessageRow`). This improves readability without changing the templated, stateless `ClockView` architecture that enables host testing.
 - **Main loop decomposition**: The monolithic `loop()` function in `main.cpp` was broken down into logical phases: `processBLECommands`, `processButtonInputs`, `updateStateMachine`, `advanceTimekeeping`, `refreshDisplayIfNeeded`, and `managePowerState`. This brings the `loop()` function up to a higher level of abstraction, making it read like a table of contents for the system's heartbeat.
 - **Testing resilience**: Relying on CMake/Ninja for host-side unit testing of embedded logic (`firmware/test/`) proved incredibly valuable. Modifying the display rendering and extracting the loop logic could be validated instantly by the host test suite without needing hardware in the loop.
 
-## 19. Python Scripting on Windows: The CP-1252 Trap (verified 2026-09-04)
+## 37. Python Scripting on Windows: The CP-1252 Trap (verified 2026-09-04)
 
 **The issue:** When automating code refactoring using Python scripts (e.g., using `open(file, 'w')` to rewrite C++ files), non-ASCII characters like em-dashes (`—`), section signs (`§`), and multiplication signs (`×`) became corrupted into character sequences like `â€”` and `Ã—`.
 
@@ -1771,3 +1771,59 @@ with open('main.cpp', 'w') as f:
 with open('main.cpp', 'w', encoding='utf-8') as f:
     f.write(content)
 ```
+
+## 38. Sleep-wake must clear the epoch — a stale time is worse than no time (verified 2026-09-05)
+
+**The bug:** The board has **no RTC**, so `g_epoch` is a software counter that the
+firmware advances with `millis()` and updates from BLE writes. After the clock slept
+overnight (WFE, up to 6 h), the stored `g_epoch` was still the pre-sleep value. On a
+button wake, the state machine re-entered `STATE_RESYNCING`, but `drawClockFace()`
+saw `g_epoch > 0` and drew the **running face with the stale time** (e.g. 11:00 pm),
+and the sleep check (`isNighttime` on that same stale epoch) immediately put it back
+to sleep. The clock showed a time it did not actually know, then vanished.
+
+**The fix:** On every sleep wake, `enterSleepMode()` now clears `g_epoch = 0` (and
+`g_last_sync_failed = false`). The clock honestly does not know the current time after
+a deep sleep, so it draws a sync screen until Home Assistant writes fresh time. A
+failed re-sync after wake then lands on the honest `NO_TIME` state instead of
+re-sleeping against a stale time.
+
+**The general principle:** after ANY long/suspending sleep, invalidate cached
+time-derived state rather than trusting it. "Show a plausible-sounding but wrong
+time" is a worse failure than "I don't know the time yet." The state machine's display
+branching `if (g_epoch > 0)` must treat "have a stale value" and "have a valid value"
+as different things.
+
+**Note the related `secondsToShutdown` edge case that surfaced the same night:** at
+exactly 23:00 the "seconds to next 23:00" formula `(23*3600 - local + 86400) % 86400`
+returns 0, making `g_awake_until = millis()` (already expired) → immediate re-sleep.
+The fix wraps 0 → 86400. Both were caught with host-harness regression tests written
+first (see `ButtonWakeFromSleepDoesNotShowStaleTime` and
+`SecondsToShutdownAtExactBedtime`).
+
+## 39. Auto-generate release titles + change summaries from git history (verified 2026-09-05)
+
+A release is more useful when the notes open with a plain-language summary of the
+user-facing changes and the title names the headline change, instead of being only a
+version number and a static asset list.
+
+We added `.github/workflows/gen_release_notes.py`, invoked by the Release workflow,
+which:
+- finds the previous `v*` tag (semver-sorted, so v0.10 > v0.9);
+- extracts `feat`/`fix` conventional-commit subjects in `prev..tag`;
+- writes a body: `# eClock firmware <tag>`, `**Key changes since <prev>:**` with
+  bulleted changes, then the standard asset + flash instructions;
+- emits a `title=<tag> - <Change Summary>` line to `$GITHUB_OUTPUT`, used by
+  `softprops/action-gh-release` as the release `name`.
+
+Design choices worth keeping:
+- The workflow needs `fetch-depth: 0` (shallow checkout can't diff against previous
+  tags).
+- Docs/refactor/chore commits are *excluded* from the headline list so it reads as
+  "what changed for the user", not a full log dump. (They're still in the GitHub
+  auto-generated changelog link.)
+- If there's no previous tag (a first release), fall back to "(initial release)" rather
+  than dumping the whole history as "changes".
+- Titles are derived, not curated: the phrasing inherits the telegraphic style of the
+  commit message. If a release has a headline a human wants to polish, edit it after
+  the fact with `gh release edit <tag> --title ...`.

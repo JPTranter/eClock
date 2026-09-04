@@ -106,15 +106,16 @@ tests written first, seen red, then green).
 || Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
 || CI / guardrails | **Added.** GitHub Actions (secret scan via gitleaks, firmware build, host tests + coverage) + a local pre-commit gitleaks/formatting hook. `.github/workflows/*`, `.pre-commit-config.yaml`, `.gitleaks.toml`. |
-|| Firmware version | **Added.** `ECLOCK_VERSION` (default **0.3.0**, CI-injected) shown at the bottom left of the syncing screen. |
+|| Firmware version | **Added.** `ECLOCK_VERSION` (default **0.4.0**, CI-injected) shown at the bottom left of the syncing screen. |
 || Release artifacts | **Fixed + verified on-device.** A release (or `v*` tag) builds and attaches a versioned `.hex`/`.uf2`/`.elf`. The UF2 now uses the canonical spec layout (familyID@24, magicEnd@508) — root cause of the old non-flashing UF2 (old converter put familyID@32/payload@44). **Proven 2026-08-28**: the release UF2 was verified canonical and the same image flashed to the physical board via serial DFU → app up (COM10 = 8045). Note: UF2 drag-and-drop over the MSC drive crashes this bootloader on this machine (see §6) — serial DFU is the reliable flash path. `v0.2.0` ships the good artifact. See `docs/lessons/2026-08-28-phase9-uf2-verified.md`. |
 
 ## Immediate next steps
 
-1. **Confirm the re-sync backoff fix on hardware** — the failed-sync retry-loop fix is
-   committed and unit-tested, but not yet flashed to the bedside clock. Flash and
-   observe that the sync icon no longer re-appears every minute when Home Assistant is
-   unreachable.
+1. **~~Confirm the re-sync backoff fix on hardware~~** — **DONE (2026-09-05).** Shipped in
+   v0.4.0, which was built, flashed to the physical board (COM8 → app COM12) and verified
+   booting. The sleep-wake stale-time fix landed in the same build (TDD regression tests
+   + device flash confirmed). Watch item: on the bench, confirm the sync icon no longer
+   re-appears every minute with HA unreachable.
 2. **Measure power consumption on the bench** — three measurements close the
    37–335 day range: full-board idle current (WFE), partial-refresh peak/avg
    current, and SSD1680 idle current with rail on. Methodology in
