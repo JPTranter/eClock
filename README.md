@@ -224,8 +224,9 @@ Two paths:
 
 ```bash
 cd firmware
-python tools/reset_to_bootloader.py                      # prints the bootloader port
-pio run -e mbed -t upload --upload-port <bootloader port>  # e.g. COM6
+python tools/find_board.py            # optional: see which COM the XIAO is on
+python tools/reset_to_bootloader.py   # if running the app: reboots into bootloader
+pio run -e mbed -t upload --upload-port <bootloader port>  # e.g. COM8
 ```
 
 A successful upload ends with `Device programmed.`, and the board re-enumerates as the

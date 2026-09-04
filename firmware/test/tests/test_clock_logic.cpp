@@ -66,8 +66,10 @@ TEST(ClockLogic, SecondsToShutdownWrapsPastMidnight) {
 }
 
 TEST(ClockLogic, SecondsToShutdownAtExactBedtime) {
-    // Exactly 23:00 -> 0 s to next shutdown (it is already bedtime).
-    EXPECT_EQ(secondsToShutdown(23 * 3600), 0u);
+    // Exactly 23:00 -> the NEXT 23:00 is 24h away, not 0 s.
+    // Returning 0 here would make g_awake_until = millis() (already expired),
+    // causing the clock to immediately re-enter sleep after a button wake.
+    EXPECT_EQ(secondsToShutdown(23 * 3600), 86400u);
 }
 
 // ---- battery classification -------------------------------------------------

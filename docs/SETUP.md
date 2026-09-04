@@ -40,15 +40,14 @@ depending on what is running. Knowing which is which is essential:
 | Bootloader | `2886:0064` | COM6 | Accepts serial DFU uploads |
 | Application | `2886:8045` | COM10 | TinyUSB CDC from our firmware (mbed core) |
 
-List them at any time:
+List them at any time with the dedicated helper (also the single source of truth
+for the VID/PID table used by `reset_to_bootloader.py` and `capture_boot.py`):
 
 ```bash
-python -c "
-import serial.tools.list_ports as lp
-for p in lp.comports():
-    if p.vid == 0x2886:
-        print(p.device, hex(p.pid))
-"
+python tools/find_board.py          # human-readable: role per port + next step
+python tools/find_board.py -b       # print only the bootloader port (exit 1 if absent)
+python tools/find_board.py -a       # print only the application port (exit 1 if absent)
+python tools/find_board.py -m       # machine line: "boot=<port> app=<port>"
 ```
 
 Your port numbers will differ. Do not assume COM6/COM11.

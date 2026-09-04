@@ -230,6 +230,29 @@ TEST(State, FailedResyncBacksOffFullHourInsteadOfImmediateRetry) {
     EXPECT_EQ(ClockFixture::state(), STATE_RESYNCING);
 }
 
+// BUG REGRESSION TEST: After sleeping and waking by button, the clock must NOT
+// show the stale pre-sleep time. The clock should show a sync screen (it does
+// not know the current time), not the running face with the old time.
+//
+// Scenario: clock is at 23:00 (bedtime) with a valid time. It enters sleep.
+// A button wakes it. enterSleepMode() transitions to STATE_RESYNCING, but
+// g_epoch still holds the pre-sleep time. Before the fix, drawClockFace()
+// checked g_epoch > 0 and showed the running face with the stale time (11:00pm).
+// After the fix, the clock shows a sync screen until HA provides fresh time.
+TEST(State, ButtonWakeFromSleepDoesNotShowStaleTime) {
+    ClockFixture::reset();
+    ClockFixture::setEpoch(23 * 3600, 0);  // 23:00 local, bedtime
+    g_state = STATE_RUNNING;
+    test_set_next_wake(true);               // button wake
+    ClockFixture::runLoop();                // -> enterSleepMode() -> RESYNCING
+
+    EXPECT_EQ(ClockFixture::state(), STATE_RESYNCING);
+    // g_epoch should be cleared so the clock does not display a stale time.
+    // The clock does not know the current time after waking from sleep.
+    EXPECT_EQ(ClockFixture::epoch(), 0)
+        << "After sleep wake, g_epoch must be 0 so the stale time is not shown.";
+}
+
 // A failed boot sync (no time ever) still goes to the error screen. That path
 // is separate from the re-sync backoff and must be unaffected.
 TEST(State, FailedReorderBootSyncStillGoesNoTime) {

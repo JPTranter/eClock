@@ -11,34 +11,33 @@ import sys
 import time
 
 import serial
-import serial.tools.list_ports
 
-APP_PID = 0x8044      # application (TinyUSB CDC)
-BOOT_PID = 0x0064     # Seeed UF2 bootloader
-VID = 0x2886
+from find_board import find_board_ports
 
 
-def find_port(pid):
-    for p in serial.tools.list_ports.comports():
-        if p.vid == VID and p.pid == pid:
-            return p.device
+def find_app_port():
+    boot_ports, app_ports = find_board_ports()
+    # Prefer the current mbed application PID (0x8045), fall back to legacy 0x8044.
+    for p in app_ports:
+        return p
     return None
 
 
 def main():
     duration = float(sys.argv[1]) if len(sys.argv) > 1 else 20.0
 
-    print("[host] waiting for application port (VID 2886 PID 8044)...")
+    print("[host] waiting for application port (VID 2886)...")
     deadline = time.time() + 10
     port = None
     while time.time() < deadline:
-        port = find_port(APP_PID)
+        port = find_app_port()
         if port:
             break
         time.sleep(0.02)   # poll fast to win the enumeration race
 
     if not port:
-        boot = find_port(BOOT_PID)
+        boot_ports, _ = find_board_ports()
+        boot = boot_ports[0] if boot_ports else None
         if boot:
             print(f"[host] FAIL: board is in BOOTLOADER mode on {boot}, not running an app.")
         else:

@@ -61,8 +61,8 @@ taken on that transition.
 | `RESYNCING` | `RUNNING` | BLE time write received (same as SYNCING→RUNNING). | Time updated; radio stopped; back to running. |
 | `RESYNCING` | `RUNNING` | Sync timeout **and** `g_epoch != 0` (had a time already). `loop()` §3. | `g_last_sync_failed = true`; **`g_last_sync_millis` is pushed to now** so the clock backs off a full hour before retrying (no tight retry loop that would drain the battery). Carries on with the drifting clock (does **not** show the error screen). |
 | `NO_TIME` | `RESYNCING` | Button press. `loop()` §2. | `startSyncAttempt()` — tries again. |
-| `SLEEPING` | `RESYNCING` | 5am wake (fixed 6 h sleep elapses, no button). `enterSleepMode()`. | Panel repowered (D6 HIGH), display re-inited, `startSyncAttempt()`. |
-| `SLEEPING` | `RESYNCING` | Button wakes the clock early. `enterSleepMode()`. | Same as above, **plus** `g_awake_until = millis() + sec_to_shutdown` so the clock stays awake until the next 11pm. |
+| `SLEEPING` | `RESYNCING` | 5am wake (fixed 6 h sleep elapses, no button). `enterSleepMode()`. | Panel repowered (D6 HIGH), display re-inited, `g_epoch` cleared (no RTC — clock no longer knows the time), `startSyncAttempt()`. |
+| `SLEEPING` | `RESYNCING` | Button wakes the clock early. `enterSleepMode()`. | Same as above, **plus** `g_awake_until = millis() + sec_to_shutdown` so the clock stays awake until the next 11pm. `g_epoch` is cleared so the stale pre-sleep time is not shown. |
 | `LOW BATTERY LOCK` | (terminal) | Never leaves this state on battery. A recharge reboots the board fresh into `SYNCING`. | The panel retains the low-battery message even after power loss. |
 
 ## Interaction with the other subsystems

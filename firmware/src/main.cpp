@@ -358,6 +358,17 @@ static void enterSleepMode() {
         g_awake_until = 0;    // normal 5am wake, allow bedtime check
     }
 
+    // Clear the time — the clock does not know the current time after
+    // sleeping (the epoch drifted during the 6h sleep with no RTC). This
+    // forces drawClockFace() to show a sync screen (not a stale running
+    // face) until HA provides fresh time. A failed re-sync after wake
+    // would also re-enter SLEEPING with the stale time still showing,
+    // because isNighttime() would be true; clearing g_epoch makes the
+    // RESYNCING timeout path go to NO_TIME instead (the honest state).
+    // g_epoch is restored on the next successful BLE time write.
+    g_epoch = 0;
+    g_last_sync_failed = false;
+
     // Transition to re-sync to get fresh time from HA
     g_state = STATE_RESYNCING;
     g_needs_display_update = true;

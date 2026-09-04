@@ -12,30 +12,19 @@ import sys
 import time
 
 import serial
-import serial.tools.list_ports
 
-VID = 0x2886
-APP_PIDS = [0x8044, 0x8045]      # application: 0x8044 (Adafruit), 0x8045 (mbed)
-BOOT_PID = 0x0064     # Seeed UF2 bootloader CDC
-
-
-def find_port(pids):
-    if isinstance(pids, int):
-        pids = [pids]
-    for p in serial.tools.list_ports.comports():
-        if p.vid == VID and p.pid in pids:
-            return p.device
-    return None
+from find_board import find_board_ports
 
 
 def main():
-    boot = find_port(BOOT_PID)
+    boot_ports, app_ports = find_board_ports()
+    boot = boot_ports[0] if boot_ports else None
+    app = app_ports[0] if app_ports else None
     if boot:
         print(f"[host] already in bootloader on {boot} - nothing to do")
         print(f"[host] upload with: pio run -e mbed -t upload --upload-port {boot}")
         return 0
 
-    app = find_port(APP_PIDS)
     if not app:
         print("[host] FAIL: no XIAO found (neither application nor bootloader).")
         print("[host] Check the cable, or double-tap RESET to force the bootloader.")
@@ -56,7 +45,8 @@ def main():
 
     deadline = time.time() + 15
     while time.time() < deadline:
-        boot = find_port(BOOT_PID)
+        boot_ports, _ = find_board_ports()
+        boot = boot_ports[0] if boot_ports else None
         if boot:
             print(f"[host] bootloader up on {boot}")
             print(f"[host] upload with: pio run -e mbed -t upload --upload-port {boot}")

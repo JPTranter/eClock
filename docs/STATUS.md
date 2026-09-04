@@ -3,7 +3,7 @@
 Update this file at the end of each development session. It is the single place to
 look to answer "where is this project actually up to?"
 
-Last updated: 2026-08-29
+Last updated: 2026-09-05
 
 ## Current phase
 
@@ -66,6 +66,20 @@ squish or its wide glyphs overlap + the colon vanishes). A real generator bug su
 and was fixed: `gfxfont_gen.py` was TOP-aligning the colon (it floated), now it
 BOTTOM-aligns the colon to the digits' baseline; the header is self-describing
 (`// Recipe:`, `// Colon:`, `#define FONT_BASELINE`). See LESSONS_LEARNT §34.
+**2026-09-05: sleep-wake stale-time bug fixed.** After the clock went to sleep
+at 11pm, a button wake showed the stale pre-sleep time (11:00pm) instead of a
+sync screen, then went straight back to sleep — the clock had no idea what
+time it actually was. Root cause: `enterSleepMode()` transitioned to
+`STATE_RESYNCING` but left `g_epoch` holding the pre-sleep time, so
+`drawClockFace()` showed the running face (g_epoch > 0) and the bedtime check
+re-entered sleep. Fix: `g_epoch` is now cleared on every sleep wake (no RTC —
+the clock genuinely doesn't know the time), so the RESYNCING state shows a
+sync screen until HA provides fresh time, and a failed re-sync goes to NO_TIME
+(the honest state) instead of re-sleeping. A second edge-case fix:
+`secondsToShutdown(23:00)` returned 0 (making g_awake_until = millis(), already
+expired), so a button wake at exactly 11pm would re-sleep immediately; it now
+returns 86400 (the next 23:00 is 24h away). Both fixed via TDD (regression
+tests written first, seen red, then green).
 
 ## Honest state of play
 
@@ -86,7 +100,8 @@ BOTTOM-aligns the colon to the digits' baseline; the header is self-describing
 || Enclosure | Notes only, no CAD |
 || Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. **Windows env fixed (08-29):** the MinGW runtime DLLs are bundled next to the test exes by CMake, so `ctest` runs from a clean shell — all 9 suites pass with no PATH setup. |
 | State-machine design | **Added.** `docs/design/state-machine.md` — five states, full transition table, subsystem interactions, test pointers, plus a rendered Mermaid diagram. |
-| Re-sync backoff bug | **Fixed (08-29, via TDD).** A failed re-sync no longer immediately re-enters RESYNCING (which drained the battery); it backs off a full hour. Regression test `FailedResyncBacksOffFullHourInsteadOfImmediateRetry` written first. |
+|| Re-sync backoff bug | **Fixed (08-29, via TDD).** A failed re-sync no longer immediately re-enters RESYNCING (which drained the battery); it backs off a full hour. Regression test `FailedResyncBacksOffFullHourInsteadOfImmediateRetry` written first. |
+|| Sleep-wake stale-time bug | **Fixed (09-05, via TDD).** Button wake from sleep no longer shows the stale pre-sleep time then re-sleeps; `g_epoch` is cleared on wake so the clock shows a sync screen until HA provides fresh time. `secondsToShutdown(23:00)` edge case also fixed (0→86400). Regression tests `ButtonWakeFromSleepDoesNotShowStaleTime` and `SecondsToShutdownAtExactBedtime`. |
 || Low-battery warning | **Verified.** ≤20% empty icon, ≤5% final "LOW BATTERY" screen; USB (VBUS) correctly does not trigger it. |
 || Build/test docs | `README.md` has full CLI build + test + flash steps + doc links + purchase page; `docs/SETUP.md` written and verified |
 || User guide | `docs/USER_GUIDE.md` — screens, icons, charging, troubleshooting (uses real renders) |
