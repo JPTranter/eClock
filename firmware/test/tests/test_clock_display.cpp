@@ -98,7 +98,7 @@ TEST(ClockDisplay, LowBatterySwapsToEmptyIcon) {
 
 TEST(ClockDisplay, BottomMessageRenders) {
     ClockView v = makeView();
-    v.message = "Merry Christmas";
+    v.message = "Hello from Home Assistant";
     renderAndDump([&] { drawRunningFace(testDisplay, v); },
                   "output/cd_running_message.png");
 }
