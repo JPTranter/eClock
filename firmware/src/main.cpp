@@ -397,7 +397,7 @@ void setup() {
 #endif
 
     display.init(115200, true, 2, false);
-    display.setRotation(1);  // landscape: 296 wide Ã— 128 tall
+    display.setRotation(1);  // landscape: 296 wide Ãƒâ€” 128 tall
 
     // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
     // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.
@@ -525,19 +525,19 @@ static void updateStateMachine(uint32_t now) {
                 BLE.stopAdvertise();
 
                 if (g_epoch == 0) {
-                    // We never had a valid time — go to error screen
+                    // We never had a valid time â€” go to error screen
                     g_state = STATE_NO_TIME;
                     g_needs_display_update = true;
                 } else {
-                    // Re-sync failed — carry on with the drifting clock.
+                    // Re-sync failed â€” carry on with the drifting clock.
                     // Push g_last_sync_millis forward to now so the hourly gate
                     // (now - g_last_sync_millis >= SYNC_INTERVAL) is not still
                     // satisfied, and the clock backs off a FULL hour before
                     // trying again. Without this, a failed attempt leaves the
                     // gate true and the clock immediately re-enters RESYNCING
-                    // on the next loop() iteration — a tight retry loop that
+                    // on the next loop() iteration â€” a tight retry loop that
                     // keeps the radio advertising and drains the battery.
-                    // A button press still forces a manual re-sync (see §2).
+                    // A button press still forces a manual re-sync (see Â§2).
                     g_state = STATE_RUNNING;
                     g_last_sync_failed = true;
                     g_last_sync_millis = millis();
@@ -611,7 +611,7 @@ static void advanceTimekeeping(uint32_t now) {
         uint32_t elapsed = now - g_last_tick_millis;
         if (elapsed >= TICK_INTERVAL) {
             // After a sync that arrived mid-minute (g_second > 0), the first
-            // advance is partial — we skip ahead to :00.  Every subsequent
+            // advance is partial â€” we skip ahead to :00.  Every subsequent
             // advance adds exactly 60 seconds (one full minute).
             uint32_t advance = 60;
             if (g_second > 0) {
@@ -629,7 +629,7 @@ static void refreshDisplayIfNeeded() {
     // ---------------------------------------------------------------
     // 5. Refresh the ePaper display
     // ---------------------------------------------------------------
-    // Once the low-battery lock is set, never redraw — the last image on the
+    // Once the low-battery lock is set, never redraw â€” the last image on the
     // panel must stay the unambiguous low-battery warning.
     if (g_needs_display_update && !g_low_battery_lock) {
         drawClockFace();
