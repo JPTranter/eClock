@@ -397,7 +397,7 @@ void setup() {
 #endif
 
     display.init(115200, true, 2, false);
-    display.setRotation(1);  // landscape: 296 wide Ã— 128 tall
+    display.setRotation(1);  // landscape: 296 wide × 128 tall
 
     // Mbed OS SPI initialization strips the pull-up from the MISO pin (D9).
     // We must forcefully re-apply it so BUTTON_3 doesn't float and cause an IRQ storm.

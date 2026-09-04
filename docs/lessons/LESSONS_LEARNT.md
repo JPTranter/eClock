@@ -1753,3 +1753,21 @@ During a code review and refactoring pass, several structural improvements were 
 - **Display logic decoupling**: The display rendering functions were refactored into smaller, more focused helper functions (`drawMainTime`, `drawTopStatusRow`, `drawBottomMessageRow`). This improves readability without changing the templated, stateless `ClockView` architecture that enables host testing.
 - **Main loop decomposition**: The monolithic `loop()` function in `main.cpp` was broken down into logical phases: `processBLECommands`, `processButtonInputs`, `updateStateMachine`, `advanceTimekeeping`, `refreshDisplayIfNeeded`, and `managePowerState`. This brings the `loop()` function up to a higher level of abstraction, making it read like a table of contents for the system's heartbeat.
 - **Testing resilience**: Relying on CMake/Ninja for host-side unit testing of embedded logic (`firmware/test/`) proved incredibly valuable. Modifying the display rendering and extracting the loop logic could be validated instantly by the host test suite without needing hardware in the loop.
+
+## 19. Python Scripting on Windows: The CP-1252 Trap (verified 2026-09-04)
+
+**The issue:** When automating code refactoring using Python scripts (e.g., using `open(file, 'w')` to rewrite C++ files), non-ASCII characters like em-dashes (`—`), section signs (`§`), and multiplication signs (`×`) became corrupted into character sequences like `â€”` and `Ã—`.
+
+**Why it happened:** Python's built-in `open()` function on Windows defaults to the system's locale encoding (typically `cp1252`), not `utf-8`. If a UTF-8 file containing multibyte characters is read and written without explicitly specifying `encoding='utf-8'`, Python reads the bytes incorrectly and then writes the mangled strings out as new, invalid UTF-8 bytes (a classic double-encoding bug).
+
+**How to prevent it in the future:**
+*Always* specify `encoding='utf-8'` when reading and writing source code files in Python, regardless of the platform:
+```python
+# WRONG (defaults to cp1252 on Windows):
+with open('main.cpp', 'w') as f:
+    f.write(content)
+
+# CORRECT (forces utf-8):
+with open('main.cpp', 'w', encoding='utf-8') as f:
+    f.write(content)
+```
