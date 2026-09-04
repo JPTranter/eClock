@@ -159,22 +159,10 @@ void drawSyncingScreen(Display& d, const ClockView& v) {
 //   Middle: big time (unchanged).
 //   Bottom row: HA message left-aligned at x=2 (clamped so it never reaches AM/PM),
 //   AM/PM at the bottom-right.
+
+
 template <typename Display>
-void drawRunningFace(Display& d, const ClockView& v) {
-    // Convert 24h to 12h display, suppress leading zero.
-    uint8_t disp_hour = v.hour % 12;
-    if (disp_hour == 0) disp_hour = 12;
-    const char* ampm = (v.hour < 12) ? "AM" : "PM";
-
-    char timeBuf[8];
-    snprintf(timeBuf, sizeof(timeBuf), "%u:%02u", disp_hour, v.minute);
-
-    // Date string from the local epoch.
-    time_t t = v.epoch + v.tzOffset;
-    struct tm* tm_info = gmtime(&t);
-    char dateBuf[32];
-    strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
-
+void drawMainTime(Display& d, const char* timeBuf) {
     // --- Big time digits, centred (unchanged) --------------------------------
     d.setFont(&font);
     d.setTextWrap(false);
@@ -183,7 +171,10 @@ void drawRunningFace(Display& d, const ClockView& v) {
     d.getTextBounds(timeBuf, 0, 0, &tx, &ty, &tw, &th);
     d.setCursor((d.width() - tw) / 2 - tx, FONT_BASELINE);   // baseline from the font header
     d.print(timeBuf);
+}
 
+template <typename Display>
+void drawTopStatusRow(Display& d, const ClockView& v, const char* dateBuf) {
     // --- Top row: single right-aligned sync+power group ----------------------
     const int kBaseline = 14;         // top-row text baseline (aligns with flush-top icon)
     const int kRightMargin = 2;       // right anchor margin
@@ -268,7 +259,10 @@ void drawRunningFace(Display& d, const ClockView& v) {
         d.setCursor(x - 2 - sw, kBaseline);
         d.print(syncTime);
     }
+}
 
+template <typename Display>
+void drawBottomMessageRow(Display& d, const ClockView& v, const char* ampm) {
     // --- Bottom row: HA message (left-aligned) + AM/PM -----------------------
     // AM/PM at the bottom-right.
     int16_t apx, apy;
@@ -308,6 +302,27 @@ void drawRunningFace(Display& d, const ClockView& v) {
             d.print(clipped);
         }
     }
+}
+
+template <typename Display>
+void drawRunningFace(Display& d, const ClockView& v) {
+    // Convert 24h to 12h display, suppress leading zero.
+    uint8_t disp_hour = v.hour % 12;
+    if (disp_hour == 0) disp_hour = 12;
+    const char* ampm = (v.hour < 12) ? "AM" : "PM";
+
+    char timeBuf[8];
+    snprintf(timeBuf, sizeof(timeBuf), "%u:%02u", disp_hour, v.minute);
+
+    // Date string from the local epoch.
+    time_t t = v.epoch + v.tzOffset;
+    struct tm* tm_info = gmtime(&t);
+    char dateBuf[32];
+    strftime(dateBuf, sizeof(dateBuf), "%a %d %b %Y", tm_info);
+
+    drawMainTime(d, timeBuf);
+    drawTopStatusRow(d, v, dateBuf);
+    drawBottomMessageRow(d, v, ampm);
 }
 
 // Draw the sleeping placeholder ("Zzz"). drawClockFace() uses this for the
