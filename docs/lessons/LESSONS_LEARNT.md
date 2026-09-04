@@ -1746,3 +1746,10 @@ npm view @colbymchenry/codegraph repository.url
 
 This prevents documenting a different product whose commands happen to have a similar
 name.
+
+## 18. Architectural Refactoring and SOLID Principles (verified 2026-09-04)
+
+During a code review and refactoring pass, several structural improvements were made:
+- **Display logic decoupling**: The display rendering functions were refactored into smaller, more focused helper functions (`drawMainTime`, `drawTopStatusRow`, `drawBottomMessageRow`). This improves readability without changing the templated, stateless `ClockView` architecture that enables host testing.
+- **Main loop decomposition**: The monolithic `loop()` function in `main.cpp` was broken down into logical phases: `processBLECommands`, `processButtonInputs`, `updateStateMachine`, `advanceTimekeeping`, `refreshDisplayIfNeeded`, and `managePowerState`. This brings the `loop()` function up to a higher level of abstraction, making it read like a table of contents for the system's heartbeat.
+- **Testing resilience**: Relying on CMake/Ninja for host-side unit testing of embedded logic (`firmware/test/`) proved incredibly valuable. Modifying the display rendering and extracting the loop logic could be validated instantly by the host test suite without needing hardware in the loop.
