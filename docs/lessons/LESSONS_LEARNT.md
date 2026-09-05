@@ -1963,3 +1963,20 @@ The ePaper display never refreshed and the clock appeared frozen.
 
 **Lesson** — Leave the QSPI peripheral uninitialized. Do not touch raw `NRF_QSPI` registers in software.
 The negligible ~10 µA standby current of the flash is not worth destabilizing hardware initialization.
+
+
+## 47. Battery ADC Settle Time: `delayMicroseconds(50)` vs `delay(10)`
+
+**Context** — To measure battery percentage, the firmware momentarily enables the high-side resistor divider
+by driving GPIO 14 LOW, samples the voltage on P0.31 (`mbed::AnalogIn`), and disables the divider by driving
+GPIO 14 HIGH.
+
+**Finding** — Previously, `getBatteryPercent()` did `delay(10)` (10 ms busy wait) to "stabilize" the divider.
+During these 10 ms:
+1. The CPU stayed fully active in a busy spin loop.
+2. The voltage divider drew current from the battery across the divider resistors for 10 ms.
+On the XIAO, the RC time constant for the voltage divider is on the order of microseconds. A 10 ms delay
+wastes CPU cycles and extends the divider's on-time by ~200×.
+
+**Fix** — Replaced `delay(10)` with `delayMicroseconds(50)`. This provides ample settling time for the analog
+input line while drastically shortening both the active CPU window and the resistive divider's on-time.

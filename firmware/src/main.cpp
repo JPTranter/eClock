@@ -207,7 +207,7 @@ static int getBatteryPercent() {
     // Enable battery divider
     pinMode(14, OUTPUT);
     digitalWrite(14, LOW);
-    delay(10); // stabilize
+    delayMicroseconds(50); // RC settle time (<10us for 1M divider + small cap)
 
     // analogRead(32) crashes in Seeed's mbed core due to an out-of-bounds array access.
     // Instead, we directly instantiate an mbed AnalogIn on P0_31.
