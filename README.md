@@ -1,9 +1,14 @@
 # eClock — a low-power ePaper clock
 
-An inexpensive, reliable ePaper clock built to solve one specific problem: helping
-people leave the house on time for church. It shows accurate time on an always-on
-ePaper panel, runs for months on a single small LiPo, and keeps that time correct by
-syncing its clock from Home Assistant over Bluetooth Low Energy.
+An inexpensive, reliable ePaper clock that keeps you on time — not by nagging, but
+by keeping time (and what you need to remember) in your peripheral vision. Its big,
+always-on ePaper display and customizable daily reminders give you the situational
+awareness to walk out the door when you meant to — and the fact that it started life
+as a bedtime-clock for getting to Sunday service on time is purely coincidental.
+
+It shows accurate time on an always-on ePaper panel, runs for months on a single
+small LiPo, and keeps that time correct by syncing its clock from Home Assistant over
+Bluetooth Low Energy.
 
 > **⚠️ Not a standalone clock — Home Assistant is required.**
 > The clock has **no Real-Time Clock (RTC) and no time source of its own**. It only
@@ -41,7 +46,11 @@ Every sync/power icon combination is shown in
 
 ## Design goals
 
-- Readable at a glance from across a room.
+- Large, readable display — the time is readable at a glance from across a room,
+  giving constant situational awareness without demanding attention.
+- Customizable daily reminders — Home Assistant can push short messages (a weekly
+  reminder, an anniversary, "bin day tomorrow"…) onto the bottom of the display, so
+  the important things are visible without needing to pull out a phone.
 - Battery life measured in months, not days, with a usable low-battery warning.
 - Correct time without user intervention (via Home Assistant), including across
   daylight saving changes.

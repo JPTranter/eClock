@@ -4,7 +4,9 @@
 > plan; that document is the truth about where things stand.
 
 ## Project Overview
-Create an inexpensive, reliable ePaper clock that helps people be on time for church by displaying accurate time with minimal power consumption and optional Home Assistant integration.
+Create an inexpensive, reliable ePaper clock that keeps people on time — via a large,
+always-on display and customizable daily reminders — by showing accurate time with
+minimal power consumption, plus Home Assistant integration for time sync and reminders.
 
 ## Hardware Components
 - 1 x XIAO ePaper Display Board (nRF52840) - EN05

@@ -1,11 +1,13 @@
 # eClock User Guide
 
-> You'll never be late for church again.
+> You'll never be late again — for church, work, or that thing you keep forgetting.
 
 The eClock is a small, low-power ePaper clock that does one thing brilliantly: it
-shows you the time, clearly, at a glance — and keeps running for months on a single
-small battery. It never needs winding, and it even corrects itself for daylight
-saving.
+keeps you on time. It shows the time clearly, at a glance, on a big readable panel,
+and it can also show a short daily reminder (a "bin day tomorrow" or "birthday
+Saturday" note) so the important things stay in your peripheral vision. It runs for
+months on a single small battery, never needs winding, and even corrects itself for
+daylight saving.
 
 This guide covers everything you need to use one day-to-day: what the screen is
 telling you, what the little icons mean, and how to use the buttons. Every screen
