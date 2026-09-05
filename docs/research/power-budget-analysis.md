@@ -162,12 +162,16 @@ self-discharge or the charging path.
 
 ## Recommended changes
 
-1. Set `TICK_INTERVAL` to `300000` (5 min) — comfortable 3-month margin at any
+1. **Implemented (v0.5.0):**
+   - Explicit `display.powerOff()` after each partial draw to disable SSD1680 high-voltage booster/charge-pump between ticks (Lesson §44).
+   - Enabled nRF52 internal DC-DC converter (`NRF_POWER->DCDCEN = 1`), reducing active dynamic power during CPU rendering and BLE by ~30–45% (Lesson §45).
+   - Reduced battery ADC resistor divider delay from 10 ms to 50 µs (`delayMicroseconds(50)`), cutting resistive drain on-time by 200× (Lesson §47).
+2. Set `TICK_INTERVAL` to `300000` (5 min) — comfortable 3-month margin at any
    credible current. Product trade-off: the minute digit only changes every 5
    minutes.
-2. Decide on a periodic daytime full refresh (e.g. hourly) for ghosting
+3. Decide on a periodic daytime full refresh (e.g. hourly) for ghosting
    headroom, at negligible power cost.
-3. If measurement (1) comes back high (>20 µA), revisit cutting the panel rail
+4. If measurement (1) comes back high (>20 µA), revisit cutting the panel rail
    between refreshes — but note the 3.4 s full re-init cost each wake
    (Phase 3 log, "partial refresh only works within a single power-on session").
 
