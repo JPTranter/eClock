@@ -89,3 +89,7 @@ firmware/test/output/
 node_modules/
 .cache/puppeteer/
 docs/design/package*.json
+
+# Enclosure reference photos (large, local-only). The DESIGN_NOTES.md spec
+# references them; they are big photos kept on disk, not committed to git.
+docs/enclosure/hardware_stackup_*.png
