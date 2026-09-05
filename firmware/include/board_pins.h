@@ -107,4 +107,37 @@ static inline void eclock_release_twim_pins() {
 }
 #endif
 
+#if defined(ECLOCK_CORE_MBED) && defined(NRF_QSPI)
+/**
+ * Put the on-board P25Q16H QSPI flash into Deep Power-Down (DPD) mode (0xB9).
+ * Drops the flash chip's standby current from ~10-15 uA to < 1 uA.
+ */
+static inline void eclock_sleep_qspi_flash() {
+    // 1. Configure QSPI pins (P0.21 = SCK, P0.25 = CSN, P0.20 = IO0, P0.24 = IO1, P0.22 = IO2, P0.23 = IO3)
+    NRF_QSPI->PSEL.SCK = 21;
+    NRF_QSPI->PSEL.CSN = 25;
+    NRF_QSPI->PSEL.IO0 = 20;
+    NRF_QSPI->PSEL.IO1 = 24;
+    NRF_QSPI->PSEL.IO2 = 22;
+    NRF_QSPI->PSEL.IO3 = 23;
+
+    // 2. Enable peripheral and activate
+    NRF_QSPI->ENABLE = 1;
+    NRF_QSPI->TASKS_ACTIVATE = 1;
+    while (!NRF_QSPI->EVENTS_READY) {}
+    NRF_QSPI->EVENTS_READY = 0;
+
+    // 3. Send 0xB9 (Deep Power Down) opcode via custom instruction (1 byte: opcode only)
+    NRF_QSPI->CINSTRCONF = (0xB9 << 0) | (1 << 8); // OPCODE=0xB9, LENGTH=1B
+    while (!NRF_QSPI->EVENTS_READY) {}
+    NRF_QSPI->EVENTS_READY = 0;
+
+    // 4. Deactivate and disable QSPI peripheral to avoid nRF52 erratum 122 leakage
+    NRF_QSPI->TASKS_DEACTIVATE = 1;
+    while (!NRF_QSPI->EVENTS_READY) {}
+    NRF_QSPI->EVENTS_READY = 0;
+    NRF_QSPI->ENABLE = 0;
+}
+#endif
+
 #endif  // ECLOCK_BOARD_PINS_H

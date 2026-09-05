@@ -412,6 +412,11 @@ void setup() {
     eclock_release_twim_pins();
 #endif
 
+    // Put onboard QSPI flash to deep sleep (0xB9) to save 10-15 uA continuously
+#if defined(ECLOCK_CORE_MBED) && defined(NRF_QSPI)
+    eclock_sleep_qspi_flash();
+#endif
+
     display.init(115200, true, 2, false);
     display.setRotation(1);  // landscape: 296 wide × 128 tall
 

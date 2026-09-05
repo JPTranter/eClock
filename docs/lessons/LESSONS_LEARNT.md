@@ -1947,3 +1947,20 @@ NRF_POWER->DCDCEN = 1;
 ```
 cuts dynamic/active current during CPU operation (framebuffer rendering, SPI transfers, ADC conversions)
 and BLE radio activity (advertising, RX/TX) by approximately 30% to 45%.
+
+
+## 46. Deep-Sleep the On-Board QSPI Flash (`0xB9` Deep Power Down)
+
+**Context** — The XIAO nRF52840 (and Plus variant) incorporates an on-board 2MB external SPI flash (P25Q16H)
+connected to QSPI pins P0.20–P0.25.
+
+**Finding** — When powered on, the external flash defaults to standby mode, continuously drawing
+approximately 10–15 µA. Because this project does not use the external flash (firmware fits easily within
+internal flash), this represents an unnecessary constant drain 24 hours a day.
+
+**Fix** — In `firmware/include/board_pins.h`, implemented `eclock_sleep_qspi_flash()`:
+1. Temporarily map QSPI peripheral pins (`NRF_QSPI->PSEL`).
+2. Activate QSPI and send custom instruction opcode `0xB9` (Deep Power-Down).
+3. Deactivate and disable the QSPI peripheral (`NRF_QSPI->ENABLE = 0`) to prevent any peripheral leakage
+   (nRF52 erratum 122).
+This drops the flash chip current to deep power-down levels (< 1 µA).
