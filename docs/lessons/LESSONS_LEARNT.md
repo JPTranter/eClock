@@ -299,7 +299,7 @@ buffer, causing ghosting), force-sleeps the panel after every update (broken `wa
 on this panel revision), and has landscape rotation viewport bugs. GxEPD2 is a clean
 replacement.
 
-## 7. Deprecated: `D16`/`D11` as `Dxx` macros
+## 42. Deprecated: `D16`/`D11` as `Dxx` macros
 
 The Adafruit stock variant defines only `D0`–`D10`. `D16` and `D11` are not macros
 and fail at compile. The pin *indices* are correct (`g_ADigitalPinMap` maps 16→P0.27,
@@ -796,7 +796,7 @@ Outputs all positioning constants for the firmware `main.cpp`.
 - Datasheets: not committed (proprietary); download links in
   `docs/hardware/datasheets/README.md`
 
-## 17. Baseline variance across font glyphs (verified 2026-08-24)
+## 43. Baseline variance across font glyphs (verified 2026-08-24)
 
 ### The problem
 
@@ -1827,3 +1827,88 @@ Design choices worth keeping:
 - Titles are derived, not curated: the phrasing inherits the telegraphic style of the
   commit message. If a release has a headline a human wants to polish, edit it after
   the fact with `gh release edit <tag> --title ...`.
+
+
+## 40. D9 button cannot wake the board — interrupt dead AND the line reads noisy
+            (SPI MISO share makes the pin unusable)
+
+**Symptom** — The shipped eClock has a button that "doesn't react": BUTTON_3 on
+D9 (= P1.14), the physical pin that is ALSO the nRF52840 SPI MISO line.
+Pressing it did nothing in the running clock.
+
+**Root cause (confirmed by the btn_probe dev tool, v1 -> v4)**
+1. `display.init()` calls `SPI.begin()`, which makes the SPI peripheral control
+   the MISO pad (D9/P1.14). After that, the **falling-edge GPIOTE interrupt on
+   D9 never fires** — its counter stays 0 during the whole test while D1/D2 fire
+   many times.
+2. While the CPU is awake, D9's **loop poll P climbs continuously even with no
+   button press** (the pin is read LOW / floating low), so there is no clean
+   poll signal to threshold either. (Both facts were also true immediately after
+   trying to reclaim D9 as plain GPIO via `NRF_GPIO->PIN_CNF[46]`.)
+
+**Fix attempted** — `reclaimD9Gpio()`: after `display.init()`, force
+`NRF_GPIO->PIN_CNF[46]` (P1.14) back to input + pull-up and re-attach the ISR.
+Result: D9 I still stayed 0 => the SPI-peripheral ownership of the pad is not
+cleanly unwound with a one-line PIN_CNF write, or the pad is genuinely not
+GPIOTE-capable while the panel is powered/SPI-selected.
+
+**Conclusion** — D9: the combined interrupt cannot be restored via the simple
+software reclaim this probe tried, and polling is both impossible while the
+clock sleeps under WFE and unreliable while awake. **D9 is not a usable wake /
+button on this build**. Options for a real solution (only if you need a 3rd
+button or a wake button):
+- Route a button to a different physical pin that is not on the SPI bus (e.g.
+  one of the unused GPIOs on the board / a header pin), and wire that to the
+  switch — a hardware change.
+- Or accept D1/D2 for wake-only and treat D9 as a hardware defect (reflow).
+
+**Proof tool** — `firmware/proto/btn_probe/` (kept). It boots the panel under
+production conditions and shows per-button interrupt("I") + poll("P")
+counters on-screen and on serial. Interpretation:
+- `I` rises on press => that pin's interrupt works.
+- `I=0` but `P` rises cleanly => interrupt dead, pin pollable (potential
+  software polling fix — but the clock can't poll in WFE sleep).
+- `I=0` AND `P` climbs with no press => pin reads noisy/low => not usable.
+
+**Keep** — btn_probe remains a reusable lessons-learnt instrument for "is THIS
+pin driveable / can ITS interrupt fire" questions.
+
+Measured on hardware (v4, idle): D1 I≈6 P≈1, D2 I≈2 P≈1, D9 I=0 P≈0/rising.
+
+
+## 41. Probe display must mirror the shipped firmware's init exactly — the RST remap is the load-bearing line
+
+**Symptom** — While building the btn_probe dev tool, the e-paper panel would not
+come up: it printed `Busy Timeout!` on boot and drew nothing. Iterating the
+*render* code (partial windows, manual clears, powerOff calls) never fixed it.
+
+**Root cause** — the probe's `setup()` was missing the mbed-core **RST remap**
+that the shipped clock does before `display.init()`:
+```cpp
+extern PinDescription g_APinDescription[];
+g_APinDescription[29].name = P0_15;   // re-bind index 29 to the physical P0.15 RST
+display.init(115200, true, 2, false); // init(false) already does a full white refresh
+display.setRotation(1);
+```
+Without that remap, index 29 still points at its default (P0.9), so the panel's
+RST line is a no-op, GxEPD2 cannot reset the SSD1680, and every init times out
+on BUSY. The render loop was never the problem.
+
+**Unhelpful things I tried before finding it**
+- Writing `NRF_GPIO->PIN_CNF[46]` (D9/P1.14) to "reclaim" D9 as GPIO. That
+  *tampered with the SPI MISO pin the panel uses* and caused/kept `Busy
+  Timeout!`. **Do not touch the display's SPI pins' GPIO config in a probe.**
+- Adding `clearScreen()`/`display(false)` before the first draw — a redundant
+  extra full refresh that also triggered `Busy Timeout!`.
+
+**The reliable display recipe (matches shipping `main.cpp`)**
+1. `#include "pinDefinitions.h"` (provides `PinDescription` + `P0_15`).
+2. Remap `g_APinDescription[29].name = P0_15` BEFORE `display.init()`.
+3. `display.init(115200, true, 2, false)` then `display.setRotation(1)`.
+4. Draw via the paged pattern: `setPartialWindow(0,0,W,H); firstPage();
+   do { fillScreen(WHITE); draw(); } while (nextPage());` — no per-draw
+   powerOff(), no manual full clears.
+
+A working reference for "thin read-only probe on this hardware" is
+`firmware/proto/btn_probe/src/main.cpp` (kept) — it now boots the panel cleanly
+under the shipped pattern and reports button Interrupt(I)/Poll(P) counters.

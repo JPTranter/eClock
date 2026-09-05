@@ -5,6 +5,26 @@ look to answer "where is this project actually up to?"
 
 Last updated: 2026-09-05
 
+## 2026-09-05 — D9 button conclusively diagnosed; board restored
+
+Built a kept dev probe (`firmware/proto/btn_probe/`, `[env:proto]`) that boots
+the panel under the exact production conditions and reports per-button
+Interrupt(I)/Poll(P) counters. Hardware findings:
+1. **D9 = P1.14 is the SPI MISO pin**; after `display.init()` its falling-edge
+   interrupt never fires (I stays 0) and its poll line reads noisy-low (P climbs
+   with no press). No software change restores it (a `NRF_GPIO->PIN_CNF` reclaim
+   failed too).
+2. Because the clock sleeps under WFE (can't poll) and D9's poll is unreliable,
+   **D9 cannot wake the board** — a real fix is hardware (route a button off the
+   SPI pins).
+3. The probe work also surfaced a clean **standalone-display recipe** for this
+   board: include `pinDefinitions.h`, remap `g_APinDescription[29] = P0_15`
+   BEFORE `display.init()`, else `Busy Timeout`. See LESSONS_LEARNT §41.
+
+The shipping firmware source was never modified; after the probe work the real
+`[env:mbed]` firmware was reflashed and verified booting on COM12 with no Busy
+Timeout.
+
 ## Current phase
 
 **Phase 6 (Review & Polish) underway.** Power budget analysis written and
@@ -97,7 +117,7 @@ tests written first, seen red, then green).
 || BLE time sync (HA side) | **Verified.** |
 || Font tooling | **Hardened.** `fix` command normalises yOffsets. Sprite auto-sizes cells for any font. |
 || Power budget | **Modelled but unmeasured.** `docs/research/power-budget-analysis.md` — the project's #1 risk now has a reproducible model. Ready for bench measurement. |
-|| Enclosure | Notes only, no CAD |
+|| Enclosure | Specification written with hardware stackup photos (`docs/enclosure/DESIGN_NOTES.md`). Form factor: 70° angled desk stand, 41x19x5mm battery, front/rear photos committed. Ready for CAD. |
 || Host test harness | **Verified.** `firmware/test/` compiles unmodified `main.cpp` on the host (≥98% line coverage), PNG renders of the clock face. **Windows env fixed (08-29):** the MinGW runtime DLLs are bundled next to the test exes by CMake, so `ctest` runs from a clean shell — all 9 suites pass with no PATH setup. |
 | State-machine design | **Added.** `docs/design/state-machine.md` — five states, full transition table, subsystem interactions, test pointers, plus a rendered Mermaid diagram. |
 || Re-sync backoff bug | **Fixed (08-29, via TDD).** A failed re-sync no longer immediately re-enters RESYNCING (which drained the battery); it backs off a full hour. Regression test `FailedResyncBacksOffFullHourInsteadOfImmediateRetry` written first. |
