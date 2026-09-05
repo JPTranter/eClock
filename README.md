@@ -2,8 +2,20 @@
 
 An inexpensive, reliable ePaper clock built to solve one specific problem: helping
 people leave the house on time for church. It shows accurate time on an always-on
-ePaper panel, runs for months on a single small LiPo, and optionally syncs its clock
-from Home Assistant over Bluetooth Low Energy.
+ePaper panel, runs for months on a single small LiPo, and keeps that time correct by
+syncing its clock from Home Assistant over Bluetooth Low Energy.
+
+> **⚠️ Not a standalone clock — Home Assistant is required.**
+> The clock has **no Real-Time Clock (RTC) and no time source of its own**. It only
+> ever shows the time that Home Assistant writes to it over BLE (once at boot, then
+> hourly, and after every wake from sleep). Without a working Home Assistant setup it
+> has no way to know the time — it will sit on a "Syncing…" / "No Time!" screen and
+> will not keep time on its own. **Home Assistant is not optional: it is the clock's
+> time source.** Before you evaluate or deploy this clock, set up the Home Assistant
+> integration first (see [Home Assistant time sync](#home-assistant-time-sync) below).
+>
+> *If you want a clock that keeps time with no other infrastructure, this project is
+> not that — a self-contained clock needs a different hardware/software design.*
 
 Status: **Phase 6 — review & polish.** Firmware, BLE time sync (device + Home
 Assistant side), power-budget modelling and a 98%-coverage host test harness are all
@@ -31,7 +43,8 @@ Every sync/power icon combination is shown in
 
 - Readable at a glance from across a room.
 - Battery life measured in months, not days, with a usable low-battery warning.
-- Correct time without user intervention, including across daylight saving changes.
+- Correct time without user intervention (via Home Assistant), including across
+  daylight saving changes.
 - Reproducible by someone else from the documentation in this repo.
 - Fully open source: firmware, enclosure, and build instructions.
 
@@ -59,8 +72,8 @@ Every sync/power icon combination is shown in
 - [Test checklists](docs/testing/PHASE1_CHECKLIST.md) — the Phase 1/2 display test
   checklists (`docs/testing/`).
 - [Enclosure notes](docs/enclosure/DESIGN_NOTES.md) — enclosure design considerations.
-- [Home Assistant integration](integrations/homeassistant/README.md) — the BLE time-sync
-  custom component.
+- [Home Assistant integration](integrations/homeassistant/README.md) — the **required**
+  BLE time-sync custom component (the clock's only time source).
 
 ## Hardware
 
@@ -123,7 +136,16 @@ where. Everything this project learned from them is written up in plain terms in
 
 ## Home Assistant time sync
 
-`integrations/homeassistant/custom_components/epaper_clock/` contains a custom
+**Home Assistant is the clock's time source — it is required, not optional.** The
+clock cannot keep or display time on its own (it has no RTC), so before the clock is
+usable you must install the integration in Home Assistant and have it reachable via BLE.
+
+> **Minimum requirement to use the clock:** a Home Assistant instance with **Bluetooth
+> enabled**, the `epaper_clock` custom component installed, powered on, and in BLE range
+> of the clock. The clock does the discovery; the integration pushes the time. Without
+> this, the clock cannot proceed past its sync/waiting screen.
+
+`integrations/homeassistant/custom_components/epaper_clock/` contains the custom
 component that discovers the clock by BLE advertisement and writes the current epoch
 plus UTC offset to the standard Current Time characteristic (`0x2A2B`). It exposes an
 `epaper_clock.sync_time` service for manual resyncs. The device and host sides were
@@ -233,9 +255,17 @@ A successful upload ends with `Device programmed.`, and the board re-enumerates 
 running application on its application COM port. If the helper can't find the board,
 **double-tap the RESET button** to force the bootloader manually.
 
-See [the full setup guide](docs/SETUP.md), [the hardware pinout](docs/hardware/PINOUT.md)
-before wiring anything, and [the status](docs/STATUS.md) for where the project stands
-today. All the docs are linked from [Documentation](#documentation) above.
+> **Flashing the firmware is not the end.** A freshly-flashed board just sits on the
+> "Syncing…" screen — it has no time until it receives it from Home Assistant. After
+> flashing, set up the Home Assistant integration and bring it within BLE range; until
+> it syncs, the clock will not show a time. See
+> [Home Assistant time sync](#home-assistant-time-sync).
+
+See the [full setup guide](docs/SETUP.md) for the build/flash/monitor flow, the
+[Home Assistant integration README](integrations/homeassistant/README.md) for installing
+and configuring the time sync, the [hardware pinout](docs/hardware/PINOUT.md) before
+wiring anything, and the [status](docs/STATUS.md) for where the project stands today.
+All the docs are linked from [Documentation](#documentation) above.
 
 ## CI & secret scanning
 
