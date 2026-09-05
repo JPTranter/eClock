@@ -283,7 +283,9 @@ static void drawClockFace() {
         }
     } while (display.nextPage());
 
-    display.powerOff();
+    // Note: Do NOT call display.powerOff() here after partial draws.
+    // Powering down the SSD1680 between partial updates causes severe ghosting
+    // and particle shadow artifacts on many panel batches / revisions (OTP LUT sensitivity).
 }
 
 static void drawSleepIcon() {

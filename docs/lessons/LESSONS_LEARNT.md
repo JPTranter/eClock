@@ -1980,3 +1980,21 @@ wastes CPU cycles and extends the divider's on-time by ~200×.
 
 **Fix** — Replaced `delay(10)` with `delayMicroseconds(50)`. This provides ample settling time for the analog
 input line while drastically shortening both the active CPU window and the resistive divider's on-time.
+
+
+## 48. SSD1680 `powerOff()` between partial updates causes severe ghosting on many panels
+
+**Symptom** — After enabling `display.powerOff()` at the end of partial draws in v0.5.0 to reduce idle current,
+certain hardware boards and panel batches displayed dark drop-shadows and particle artifacts behind updated digits
+(e.g. `10:43`). Reverting to v0.4.0 (where `powerOff()` was omitted) completely eliminated the artifact.
+
+**Root cause** — GxEPD2's partial update mechanism relies on differential RAM buffers (`0x24` new data vs `0x26` previous data)
+and controller LUTs. When `display.powerOff()` is executed, the SSD1680's internal charge pumps and driving rails are fully powered down
+(`0x22, 0x83 -> 0x20`). Depending on the panel's factory OTP LUT calibration and electrophoretic particle responsiveness:
+1. Re-powering cold each minute can disturb differential waveform timing.
+2. Incomplete particle clearing pulses lead to accumulated particle drag/shadows across consecutive ticks.
+
+**Lesson / Fix** — Do not call `display.powerOff()` after partial updates. Keep the SSD1680 powered between minute ticks
+during the day (05:00–23:00). The panel rail is still completely cut via the D6 MOSFET during overnight sleep (23:00–05:00).
+The battery penalty is only ~60–100 µA quiescent daytime draw (~1.44 mAh/day, or ~4–10 days runtime on a 500 mAh battery),
+which is well worth pristine visual quality.

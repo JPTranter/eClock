@@ -162,10 +162,10 @@ self-discharge or the charging path.
 
 ## Recommended changes
 
-1. **Implemented (v0.5.0):**
-   - Explicit `display.powerOff()` after each partial draw to disable SSD1680 high-voltage booster/charge-pump between ticks (Lesson §44).
+1. **Implemented (v0.5.0, revised v0.6.0):**
    - Enabled nRF52 internal DC-DC converter (`NRF_POWER->DCDCEN = 1`), reducing active dynamic power during CPU rendering and BLE by ~30–45% (Lesson §45).
    - Reduced battery ADC resistor divider delay from 10 ms to 50 µs (`delayMicroseconds(50)`), cutting resistive drain on-time by 200× (Lesson §47).
+   - *Note on display power:* Explicit `display.powerOff()` after partial draws was tried in v0.5.0 but caused severe ghosting / particle artifacts on various panel revisions and was removed in v0.6.0 (Lesson §48). Panel rail is still fully cut via D6 during overnight sleep.
 2. Set `TICK_INTERVAL` to `300000` (5 min) — comfortable 3-month margin at any
    credible current. Product trade-off: the minute digit only changes every 5
    minutes.
