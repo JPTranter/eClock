@@ -72,6 +72,8 @@ public:
         return true;
     }
 
+    void powerOff() {}
+
 private:
     bool _armed;
 };

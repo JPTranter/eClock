@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>eClock Desk Stand — Design Render</title>
+<style>
+  :root{
+    --fg: var(--foreground, #e6e6e6);
+    --muted: var(--muted-foreground, #9a9a9a);
+    --line: var(--border, #333);
+    --card: var(--card, #16181d);
+    --accent: var(--accent, #4a9eff);
+    --plastic: #2b2f36;
+    --plastic-hi: #3a4049;
+    --plastic-lo: #1d2026;
+    --glass: #f2f2ee;
+  }
+  html,body{margin:0;padding:0;background:transparent;color:var(--fg);
+    font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:13px;}
+  .wrap{max-width:860px;padding:8px 10px 20px;}
+  h2{font-size:14px;font-weight:600;margin:18px 0 4px;color:var(--fg);}
+  p.sub{margin:0 0 10px;color:var(--muted);font-size:12px;}
+  svg{display:block;width:100%;height:auto;background:var(--card);
+    border:1px solid var(--line);border-radius:8px;}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;color:var(--muted);font-size:11px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .sw{width:10px;height:10px;border-radius:2px;display:inline-block;border:1px solid var(--line);}
+  table{border-collapse:collapse;margin-top:8px;font-size:12px;}
+  td,th{border:1px solid var(--line);padding:4px 10px;text-align:left;}
+  th{color:var(--muted);font-weight:600;}
+  .dim{fill:var(--accent);font-size:10px;font-family:ui-monospace,Consolas,monospace;}
+  .note{fill:var(--muted);font-size:10px;}
+  .callout{stroke:var(--accent);stroke-width:1;fill:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h2>Side profile — 70° viewing wedge</h2>
+  <p class="sub">Battery low in the base; button push force vectors into the desk. Units mm.</p>
+
+  <svg viewBox="0 0 840 360" role="img" aria-label="Side profile of angled eClock stand">
+    <!-- desk line -->
+    <line x1="30" y1="310" x2="810" y2="310" stroke="var(--line)" stroke-width="2"/>
+    <g class="note"><text x="36" y="326">DESK SURFACE</text></g>
+
+    <!-- the wedge body: base + inclined face at 70deg from horizontal -->
+    <!-- base footprint 24mm deep; scale 3.2 px/mm -->
+    <!-- front bezel plate (glass face) drawn as inclined slab -->
+    <g>
+      <!-- base (battery cavity) -->
+      <polygon points="240,310 500,310 500,282 240,282" fill="var(--plastic-lo)" stroke="var(--line)"/>
+      <!-- inclined front body: from base front-top rising back at 70deg -->
+      <!-- angle 70deg from horizontal => dx = h*cos(70)=0.342h, dy=h*sin(70)=0.94h -->
+      <!-- face height along incline ~ 92px -->
+      <polygon points="240,282 500,282 458,132 282,132" fill="var(--plastic)" stroke="var(--line)"/>
+      <!-- glass face overlay (the ePaper) inset on the incline -->
+      <polygon points="262,272 486,272 448,146 300,146" fill="var(--glass)" opacity="0.92"/>
+      <!-- screen content hint -->
+      <g fill="#222" font-family="ui-monospace,monospace">
+        <text x="318" y="176" font-size="20" font-weight="bold">12:04</text>
+        <text x="318" y="196" font-size="11">Sat 05 Sep</text>
+        <text x="318" y="240" font-size="9">bin day tomorrow</text>
+      </g>
+      <!-- battery inside base -->
+      <rect x="300" y="288" width="120" height="16" rx="3" fill="#3f464f" stroke="var(--line)"/>
+      <g class="note"><text x="308" y="300">LiPo 500 mAh</text></g>
+    </g>
+
+    <!-- angle annotation -->
+    <g>
+      <line x1="500" y1="310" x2="500" y2="132" stroke="var(--accent)" stroke-dasharray="4 3" stroke-width="1"/>
+      <path d="M 500 240 A 70 70 0 0 0 434 286" class="callout"/>
+      <text x="452" y="238" class="dim">70°</text>
+      <text x="520" y="248" class="note">20° back-tilt</text>
+      <text x="520" y="262" class="note">from vertical</text>
+    </g>
+
+    <!-- base depth dimension -->
+    <g>
+      <line x1="240" y1="318" x2="500" y2="318" class="callout"/>
+      <line x1="240" y1="312" x2="240" y2="324" class="callout"/>
+      <line x1="500" y1="312" x2="500" y2="324" class="callout"/>
+      <text x="348" y="334" class="dim">base 22–26 mm</text>
+    </g>
+
+    <!-- CG marker -->
+    <g>
+      <circle cx="392" cy="252" r="4" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+      <path d="M392 244 v16 M384 252 h16" stroke="var(--accent)" stroke-width="1"/>
+      <text x="404" y="248" class="dim">CG low</text>
+    </g>
+
+    <!-- button force vector -->
+    <g>
+      <line x1="330" y1="120" x2="342" y2="150" stroke="#e07a5f" stroke-width="2"/>
+      <polygon points="342,150 334,141 346,140" fill="#e07a5f"/>
+      <text x="250" y="116" fill="#e07a5f" font-size="10">button push → force into base</text>
+    </g>
+
+    <!-- charge port at rear of base -->
+    <g>
+      <rect x="494" y="290" width="8" height="12" rx="1" fill="var(--accent)" opacity="0.7"/>
+      <text x="512" y="300" class="note">USB-C</text>
+    </g>
+  </svg>
+
+  <div class="legend">
+    <span><i class="sw" style="background:var(--plastic)"></i> bezel / body (PLA-PETG)</span>
+    <span><i class="sw" style="background:var(--glass)"></i> ePaper active area</span>
+    <span><i class="sw" style="background:#3f464f"></i> battery cavity</span>
+    <span><i class="sw" style="background:var(--accent)"></i> dimensions / CG</span>
+  </div>
+
+  <h2>Front view — bezel cutout centred on active ink</h2>
+  <p class="sub">Active ink 66.9 × 29.1 mm, off-centre in the glass; cutout follows the ink, not the glass rectangle.</p>
+
+  <svg viewBox="0 0 840 300" role="img" aria-label="Front view of bezel cutout">
+    <!-- outer bezel -->
+    <rect x="90" y="40" width="640" height="220" rx="10" fill="var(--plastic)" stroke="var(--line)"/>
+    <!-- glass rectangle (off-centre border) -->
+    <rect x="150" y="66" width="520" height="168" fill="#4b515a" stroke="var(--line)"/>
+    <!-- active ink window (shifted left per asymmetric border) -->
+    <rect x="176" y="86" width="452" height="128" fill="var(--glass)"/>
+    <g fill="#222" font-family="ui-monospace,monospace">
+      <text x="212" y="136" font-size="44" font-weight="bold">12:04</text>
+      <text x="214" y="166" font-size="16">Sat 05 Sep 2026</text>
+      <text x="214" y="200" font-size="13">God is good!            PM</text>
+    </g>
+
+    <!-- border dims -->
+    <g class="dim">
+      <text x="118" y="152">5.5</text>
+      <text x="700" y="152">7.0</text>
+    </g>
+    <g class="callout">
+      <line x1="120" y1="150" x2="150" y2="150"/>
+      <line x1="672" y1="150" x2="690" y2="150"/>
+    </g>
+
+    <!-- button access notches on top edge -->
+    <g fill="var(--plastic-lo)" stroke="var(--line)">
+      <rect x="220" y="32" width="18" height="10" rx="2"/>
+      <rect x="420" y="32" width="18" height="10" rx="2"/>
+      <rect x="600" y="32" width="18" height="10" rx="2"/>
+    </g>
+    <text x="196" y="24" class="note">3 × button access (D1 / D2 / D9)</text>
+
+    <!-- FPC relief note (right edge) -->
+    <g>
+      <line x1="672" y1="220" x2="720" y2="246" class="callout"/>
+      <text x="700" y="262" class="note">FPC ribbon relief pocket (+0.8–1.5 mm)</text>
+    </g>
+  </svg>
+
+  <table>
+    <tr><th>Parameter</th><th>Value</th><th>Rationale</th></tr>
+    <tr><td>Viewing angle</td><td>70° from horizontal</td><td>eye line for desk / bedside; glare control</td></tr>
+    <tr><td>Base depth</td><td>22–26 mm</td><td>CG stability under button press</td></tr>
+    <tr><td>Battery</td><td>lower base cavity</td><td>low CG, tool-less rear snap fit</td></tr>
+    <tr><td>Buttons</td><td>top-edge notches</td><td>no glass contact; force into base</td></tr>
+    <tr><td>Charge port</td><td>rear base</td><td>accessible without disassembly</td></tr>
+    <tr><td>Assembly</td><td>front bezel + rear stand snap</td><td>30° lead-in / 60–75° retention</td></tr>
+  </table>
+</div>
+</body>
+</html>

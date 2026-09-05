@@ -1912,3 +1912,38 @@ on BUSY. The render loop was never the problem.
 A working reference for "thin read-only probe on this hardware" is
 `firmware/proto/btn_probe/src/main.cpp` (kept) — it now boots the panel cleanly
 under the shipped pattern and reports button Interrupt(I)/Poll(P) counters.
+
+
+## 44. GxEPD2 leaves the SSD1680 powered after partial updates — explicit `powerOff()` drops idle current
+
+**Context** — In `GxEPD2_BW<...>::nextPage()`, the library automatically calls `epd2.powerOff()`
+after a full screen refresh. However, in partial update mode (`setPartialWindow()`), GxEPD2 deliberately
+omits `powerOff()` so that subsequent partial draws can execute immediately without re-powering the panel
+gate/source voltages or charge pump.
+
+**Finding** — Because the clock only refreshes once per minute during the day, omitting `powerOff()`
+means the SSD1680's internal high-voltage booster and charge pumps remain active (`_power_is_on = true`)
+for the entire 60-second idle period between updates. This unnecessarily draws tens to hundreds of
+microamps continuously from the battery during the entire 18-hour active day.
+
+**Fix** — Calling `display.powerOff();` explicitly immediately after the `do { ... } while (display.nextPage());`
+loop in `drawClockFace()` instructs the SSD1680 to power down its internal driving voltages (`0x22, 0x83 -> 0x20`),
+allowing the controller to drop to its low quiescent idle state between ticks. GxEPD2's partial refresh
+re-powers the necessary rails automatically on the next draw call.
+
+
+## 45. nRF52840 Internal DC-DC Converter (`NRF_POWER->DCDCEN = 1`)
+
+**Context** — By default, the Arduino/mbed core for the Seeed XIAO nRF52840 leaves the chip's internal
+switching DC-DC regulator (REG1) disabled, falling back to the internal linear LDO regulator.
+
+**Finding** — When powered from a 3.3V / 3.7V LiPo rail stepping down to the internal core voltage (~1.3V),
+the internal LDO is only ~45–50% efficient, burning the remainder as heat. The hardware includes the
+required external LC filter inductors on the XIAO board to support the internal DC-DC converter.
+
+**Fix** — Enabling the DC-DC regulator at the top of `setup()` via:
+```cpp
+NRF_POWER->DCDCEN = 1;
+```
+cuts dynamic/active current during CPU operation (framebuffer rendering, SPI transfers, ADC conversions)
+and BLE radio activity (advertising, RX/TX) by approximately 30% to 45%.

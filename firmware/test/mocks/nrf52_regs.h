@@ -14,6 +14,7 @@
 
 struct NRF_POWER_Type {
     uint32_t USBREGSTATUS;
+    uint32_t DCDCEN;
 };
 
 struct NRF_TWIM_Type {

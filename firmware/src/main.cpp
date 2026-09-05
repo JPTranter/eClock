@@ -282,6 +282,8 @@ static void drawClockFace() {
                 break;
         }
     } while (display.nextPage());
+
+    display.powerOff();
 }
 
 static void drawSleepIcon() {
@@ -380,6 +382,9 @@ static const uint32_t TICK_INTERVAL = 60000;  // Advance time once per minute
 
 // ==== Setup ====================================================================
 void setup() {
+    // Enable internal DC-DC converter (REG1) for ~30-45% reduction in active CPU/radio power
+    NRF_POWER->DCDCEN = 1;
+
     // The mbed SEEED_XIAO_NRF52840_SENSE variant does not define the Plus board's
     // extra pins (P0.15 / P0.31). We dynamically map P0.15 over the unused D29
     // (index 29) so GxEPD2 can toggle EPD_RST (P0.15) natively using Arduino indices.
