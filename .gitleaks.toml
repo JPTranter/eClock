@@ -1,25 +1,43 @@
-# gitleaks configuration
-# https://github.com/gitleaks/gitleaks#configuration
+# GENERATED FILE - do not edit.
+# Written by: software-factory/tools/factory.py sync
+# Head:       software-factory/config/gitleaks.base.toml
+# Paths:      software-factory/config/repos.json, entry "eClock"
 #
-# By default gitleaks reports any detected secret and fails CI. These allowlist
-# entries are for KNOWN-SAFE content, not real secrets:
-#   * vendored third-party code / compiled binary libraries (upstream mbed, the
-#     Adafruit GFX font data, etc.) — not authored by this project, and binary
-#     blobs frequently trip the generic lookalike heuristics (e.g. a hex string
-#     inside an .a or a font table) that gitleaks can't distinguish.
-# The actual project source (firmware/src, integrations/, docs/, tools/) is NOT
-# in the allowlist, so real secrets there are still caught.
+# The vendored board variant ships compiled mbed libraries, whose .a files trip the generic lookalike heuristics.
+
+# gitleaks - shared policy. https://github.com/gitleaks/gitleaks#configuration
+#
+# This file is the head of the generated `.gitleaks.toml` in each project. Do not
+# edit a generated file: edit this file, or the paths in `config/repos.json`, then
+# run:
+#
+#   python tools/factory.py sync --write
+#
+# Policy, the same in every project:
+#   * Use the full default rule set.
+#   * Allowlist KNOWN-SAFE content only: build trees, vendored code, generated
+#     binary data and render output. Those hold long high-entropy runs that the
+#     generic heuristics cannot tell from a credential.
+#   * Never allowlist project source. A real secret in authored code must fail.
+#   * Allowlist paths, never regexes or stopwords over content.
+#
+# The allowlist table is generated below this text from `config/repos.json`: the
+# shared entries first, then the project's own. One table only, because a second
+# `[allowlist]` table overrides the first and silently drops the shared entries.
 
 [extend]
-# Use the default rule set (keeps the built-in secret patterns).
 useDefault = true
 
 [allowlist]
-# Exclude build artifacts that deliberately ship with the vendored board variant.
 paths = [
+    '''\.pio/''',
+    '''/build/''',
+    '''/build-.*/''',
+    '''/output/''',
+    '''\.venv/''',
+    '''\.venv-.*/''',
+    '''node_modules/''',
+    '''third_party/''',
     '''firmware/variants/.*/[Ll]ibs/.*\.a''',
     '''firmware/variants/.*/.*\.a''',
-    '''firmware/test/build/''',
-    '''firmware/test/output/''',
-    '''firmware/test/third_party/''',
 ]
