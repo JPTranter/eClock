@@ -8,7 +8,7 @@ vertical fill, and renders a labeled comparison sheet.
 
 Usage:
     python font_compare.py <fonts_dir> [--output <png>] [--time "10:44"]
-    python font_compare.py "C:/Users/jptra/AppData/Local/Temp/fontcmp"
+    python font_compare.py "<temp-dir>/fontcmp"
 
 The worst-case 12h string is 10:44 (double-digit hour '10' + the wide '4's).
 The squish is the shipped recipe: xAdvance = glyph_width - 8 per glyph.
